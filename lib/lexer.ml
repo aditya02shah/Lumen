@@ -56,18 +56,18 @@ let rec format_token (t : token) : string =
   | DATATYPE d -> (
       match d with INT -> "DATATYPE: INT" | BOOL -> "DATATYPE: BOOL")
   | WHITESPACE -> "WHITESPACE"
-  | SEMICOLON -> "';"
+  | SEMICOLON -> "';'"
   | L_PAREN -> "'('"
   | R_PAREN -> "')'"
   | L_BRACE -> "'{'"
   | R_BRACE -> "'}'"
   (* operations *)
   | ADD -> "+"
-  | SUBTRACT -> "-"
-  | MULTIPLY -> "*"
-  | DIVIDE -> "/"
-  | MOD -> "%"
-  | EQUALS -> "="
+  | SUBTRACT -> "'-'"
+  | MULTIPLY -> "'*'"
+  | DIVIDE -> "'/'"
+  | MOD -> "'%'"
+  | EQUALS -> "'='"
   | UNKNOWN x -> "<UNK ='" ^ x ^ "'>"
 
 let rec print_list (format_element : 'a -> string) (l : 'a list) : unit =
