@@ -147,8 +147,7 @@ let rec tokenize_helper (accum : token list) (prog : string list) : token list =
                 (string_of_char_list r :: rest)
           | Some t, [] -> tokenize_helper (t :: accum) rest
           | Some t, r ->
-              t :: tokenize_helper (t :: accum) (string_of_char_list r :: rest))
-      )
+              tokenize_helper (t :: accum) (string_of_char_list r :: rest)))
 
 let rec tokenize (prog : string) : token list =
   String.split_on_char ' ' prog (* split program based on whitespace *)
