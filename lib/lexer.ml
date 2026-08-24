@@ -6,9 +6,10 @@ type token =
   | NUMBER of int
   | IDENTIFIER of string
   (* keywords *)
+  | FOR
+  | WHILE
   | RETURN
-  | MUT
-  (* syntax *)
+  | MUT (* syntax *)
   | DATATYPE of dtype
   | WHITESPACE
   | SEMICOLON
@@ -16,6 +17,7 @@ type token =
   | R_PAREN
   | L_BRACE
   | R_BRACE
+  | COMMA
   (* operations *)
   | ADD
   | SUBTRACT
@@ -23,6 +25,14 @@ type token =
   | DIVIDE
   | MOD
   | EQUALS
+  | NOT_EQUALS
+  | LESS_THAN
+  | LESS_THAN_EQUALS
+  | GREATER_THAN_EQUALS
+  | GREATER_THAN
+  | LOGICAL_AND
+  | LOGICAL_OR
+  | INCREMENT
   | UNKNOWN of string (* TODO *)
 
 type partial_token =
@@ -50,6 +60,8 @@ let rec format_token (t : token) : string =
   | NUMBER n -> "NUMBER " ^ string_of_int n
   | IDENTIFIER x -> "IDENTIFIER: " ^ x
   (* keywords *)
+  | FOR -> "FOR"
+  | WHILE -> "WHILE"
   | RETURN -> "RETURN"
   | MUT -> "MUT"
   (* syntax *)
@@ -61,6 +73,7 @@ let rec format_token (t : token) : string =
   | R_PAREN -> "')'"
   | L_BRACE -> "'{'"
   | R_BRACE -> "'}'"
+  | COMMA -> "','"
   (* operations *)
   | ADD -> "+"
   | SUBTRACT -> "'-'"
@@ -68,6 +81,14 @@ let rec format_token (t : token) : string =
   | DIVIDE -> "'/'"
   | MOD -> "'%'"
   | EQUALS -> "'='"
+  | NOT_EQUALS -> "!="
+  | LESS_THAN -> "'<'"
+  | LESS_THAN_EQUALS -> "'<="
+  | GREATER_THAN_EQUALS -> "'>="
+  | GREATER_THAN -> "'>'"
+  | LOGICAL_AND -> "AND"
+  | LOGICAL_OR -> "OR"
+  | INCREMENT -> "'INCREMENT'"
   | UNKNOWN x -> "<UNK ='" ^ x ^ "'>"
 
 let rec print_list (format_element : 'a -> string) (l : 'a list) : unit =
@@ -102,13 +123,19 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
       | ')' -> (Some R_PAREN, rest)
       | '{' -> (Some L_BRACE, rest)
       | '}' -> (Some R_BRACE, rest)
+      | ',' -> (Some COMMA, rest)
       (* operations *)
-      | '+' -> (Some ADD, rest)
+      | '+' -> (
+          match rest with
+          | '+' :: rem -> (Some INCREMENT, rem)
+          | _ -> (Some ADD, rest))
       | '-' -> (Some SUBTRACT, rest)
       | '*' -> (Some MULTIPLY, rest)
       | '/' -> (Some DIVIDE, rest)
       | '%' -> (Some MOD, rest)
       | '=' -> (Some EQUALS, rest)
+      | '>' -> (Some GREATER_THAN, rest)
+      | '<' -> (Some LESS_THAN, rest)
       | _ -> (None, rest))
   | c :: rest, Accum (partials, tok_type) -> (
       match c with
@@ -132,12 +159,20 @@ let rec tokenize_helper (accum : token list) (prog : string list) : token list =
   | word :: rest -> (
       match word with
       (* keywords *)
+      | "for" -> tokenize_helper (FOR :: accum) rest
+      | "while" -> tokenize_helper (WHILE :: accum) rest
       | "return" -> tokenize_helper (RETURN :: accum) rest
       | "mut" -> tokenize_helper (MUT :: accum) rest
       (* syntax *)
       | "int" -> tokenize_helper (DATATYPE INT :: accum) rest
       | "bool" -> tokenize_helper (DATATYPE BOOL :: accum) rest
       (* | _ -> raise Unknown_token) *)
+      (* operations *)
+      | "!=" -> tokenize_helper (NOT_EQUALS :: accum) rest
+      | "<=" -> tokenize_helper (LESS_THAN_EQUALS :: accum) rest
+      | ">=" -> tokenize_helper (GREATER_THAN_EQUALS :: accum) rest
+      | "and" -> tokenize_helper (LOGICAL_AND :: accum) rest
+      | "or" -> tokenize_helper (LOGICAL_OR :: accum) rest
       | _ -> (
           (* data *)
           match get_token (string_to_char_list word) Empty with
