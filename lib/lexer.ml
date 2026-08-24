@@ -56,11 +56,11 @@ let rec format_token (t : token) : string =
   | DATATYPE d -> (
       match d with INT -> "DATATYPE: INT" | BOOL -> "DATATYPE: BOOL")
   | WHITESPACE -> "WHITESPACE"
-  | SEMICOLON -> ";"
-  | L_PAREN -> "L_PAREN"
-  | R_PAREN -> "R_PAREN"
-  | L_BRACE -> "L_BRACE"
-  | R_BRACE -> "R_BRACE"
+  | SEMICOLON -> "';"
+  | L_PAREN -> "'('"
+  | R_PAREN -> "')'"
+  | L_BRACE -> "'{'"
+  | R_BRACE -> "'}'"
   (* operations *)
   | ADD -> "+"
   | SUBTRACT -> "-"
@@ -126,30 +126,31 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
           | _ -> (merge_partial_token acc, c :: rest))
       | _ -> (merge_partial_token acc, c :: rest))
 
-let rec tokenize_helper (prog : string list) (accum : token list) : token list =
+let rec tokenize_helper (accum : token list) (prog : string list) : token list =
   match prog with
   | [] -> accum
   | word :: rest -> (
       match word with
       (* keywords *)
-      | "return" -> tokenize_helper rest (RETURN :: accum)
-      | "mut" -> tokenize_helper rest (MUT :: accum)
+      | "return" -> tokenize_helper (RETURN :: accum) rest
+      | "mut" -> tokenize_helper (MUT :: accum) rest
       (* syntax *)
-      | "int" -> tokenize_helper rest (DATATYPE INT :: accum)
-      | "bool" -> tokenize_helper rest (DATATYPE BOOL :: accum)
+      | "int" -> tokenize_helper (DATATYPE INT :: accum) rest
+      | "bool" -> tokenize_helper (DATATYPE BOOL :: accum) rest
       (* | _ -> raise Unknown_token) *)
       | _ -> (
           (* data *)
           match get_token (string_to_char_list word) Empty with
-          | None, [] -> tokenize_helper rest (UNKNOWN word :: accum)
+          | None, [] -> tokenize_helper (UNKNOWN word :: accum) rest
           | None, r ->
-              tokenize_helper
+              tokenize_helper (UNKNOWN word :: accum)
                 (string_of_char_list r :: rest)
-                (UNKNOWN word :: accum)
-          | Some t, [] -> tokenize_helper rest (t :: accum)
+          | Some t, [] -> tokenize_helper (t :: accum) rest
           | Some t, r ->
-              t :: tokenize_helper (string_of_char_list r :: rest) (t :: accum))
+              t :: tokenize_helper (t :: accum) (string_of_char_list r :: rest))
       )
 
-let rec tokenize (prog : string list) : token list =
-  List.rev (tokenize_helper prog [])
+let rec tokenize (prog : string) : token list =
+  String.split_on_char ' ' prog (* split program based on whitespace *)
+  |> List.filter (fun s -> s <> "") (* remove empty strings *)
+  |> tokenize_helper [] |> List.rev (* tokenize*)

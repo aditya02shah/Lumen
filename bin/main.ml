@@ -8,8 +8,5 @@ int main(){
 }
 |}
 
-let strings = String.split_on_char ' ' prog
-
-(* let () = Lexer.print_list (fun x -> x) strings *)
-let tokens = Lexer.tokenize strings
+let tokens = Lexer.tokenize prog
 let () = Lexer.print_list Lexer.format_token tokens
