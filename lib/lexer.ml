@@ -57,10 +57,10 @@ let rec format_token (t : token) : string =
       match d with INT -> "DATATYPE: INT" | BOOL -> "DATATYPE: BOOL")
   | WHITESPACE -> "WHITESPACE"
   | SEMICOLON -> ";"
-  | L_PAREN -> "()"
-  | R_PAREN -> ")"
-  | L_BRACE -> "{}"
-  | R_BRACE -> "}"
+  | L_PAREN -> "L_PAREN"
+  | R_PAREN -> "R_PAREN"
+  | L_BRACE -> "L_BRACE"
+  | R_BRACE -> "R_BRACE"
   (* operations *)
   | ADD -> "+"
   | SUBTRACT -> "-"
@@ -68,7 +68,7 @@ let rec format_token (t : token) : string =
   | DIVIDE -> "/"
   | MOD -> "%"
   | EQUALS -> "="
-  | UNKNOWN x -> "<UNK = " ^ x ^ ">"
+  | UNKNOWN x -> "<UNK ='" ^ x ^ "'>"
 
 let rec print_list (format_element : 'a -> string) (l : 'a list) : unit =
   match l with
@@ -95,53 +95,51 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
       match c with
       | 'a' .. 'z' | 'A' .. 'Z' -> get_token rest (Accum ([ c ], CHAR))
       | '0' .. '9' -> get_token rest (Accum ([ c ], DIGIT))
-      | ' ' | '\t' | '\n' -> get_token rest (Accum ([ c ], WS))
+      | ' ' | '\t' | '\n' | '\r' -> get_token rest (Accum ([ c ], WS))
+      (* syntax *)
+      | ';' -> (Some SEMICOLON, rest)
+      | '(' -> (Some L_PAREN, rest)
+      | ')' -> (Some R_PAREN, rest)
+      | '{' -> (Some L_BRACE, rest)
+      | '}' -> (Some R_BRACE, rest)
+      (* operations *)
+      | '+' -> (Some ADD, rest)
+      | '-' -> (Some SUBTRACT, rest)
+      | '*' -> (Some MULTIPLY, rest)
+      | '/' -> (Some DIVIDE, rest)
+      | '%' -> (Some MOD, rest)
+      | '=' -> (Some EQUALS, rest)
       | _ -> (None, rest))
   | c :: rest, Accum (partials, tok_type) -> (
       match c with
       | 'a' .. 'z' | 'A' .. 'Z' -> (
           match tok_type with
           | CHAR -> get_token rest (Accum (c :: partials, tok_type))
-          | _ -> (merge_partial_token acc, rest))
+          | _ -> (merge_partial_token acc, c :: rest))
       | '0' .. '9' -> (
           match tok_type with
           | DIGIT -> get_token rest (Accum (c :: partials, tok_type))
-          | _ -> (merge_partial_token acc, rest))
-      | ' ' | '\t' | '\n' -> (
+          | _ -> (merge_partial_token acc, c :: rest))
+      | ' ' | '\t' | '\n' | '\r' -> (
           match tok_type with
           | WS -> get_token rest (Accum (c :: partials, tok_type))
-          | _ -> (merge_partial_token acc, rest))
-      | _ -> (merge_partial_token acc, rest))
+          | _ -> (merge_partial_token acc, c :: rest))
+      | _ -> (merge_partial_token acc, c :: rest))
 
 let rec tokenize_helper (prog : string list) (accum : token list) : token list =
   match prog with
   | [] -> accum
   | word :: rest -> (
       match word with
-      (* data *)
-
       (* keywords *)
       | "return" -> tokenize_helper rest (RETURN :: accum)
       | "mut" -> tokenize_helper rest (MUT :: accum)
       (* syntax *)
       | "int" -> tokenize_helper rest (DATATYPE INT :: accum)
       | "bool" -> tokenize_helper rest (DATATYPE BOOL :: accum)
-      (* | " " -> tokenize_helper rest (WHITESPACE :: accum)
-      | "\n" -> tokenize_helper rest (WHITESPACE :: accum) *)
-      | ";" -> tokenize_helper rest (SEMICOLON :: accum)
-      | "(" -> tokenize_helper rest (L_PAREN :: accum)
-      | ")" -> tokenize_helper rest (R_PAREN :: accum)
-      | "{" -> tokenize_helper rest (L_BRACE :: accum)
-      | "}" -> tokenize_helper rest (R_BRACE :: accum)
-      (* operations *)
-      | "+" -> tokenize_helper rest (ADD :: accum)
-      | "-" -> tokenize_helper rest (SUBTRACT :: accum)
-      | "*" -> tokenize_helper rest (MULTIPLY :: accum)
-      | "/" -> tokenize_helper rest (DIVIDE :: accum)
-      | "%" -> tokenize_helper rest (MOD :: accum)
-      | "=" -> tokenize_helper rest (EQUALS :: accum)
       (* | _ -> raise Unknown_token) *)
       | _ -> (
+          (* data *)
           match get_token (string_to_char_list word) Empty with
           | None, [] -> tokenize_helper rest (UNKNOWN word :: accum)
           | None, r ->
