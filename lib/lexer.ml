@@ -17,6 +17,8 @@ type token =
   | R_PAREN
   | L_BRACE
   | R_BRACE
+  | L_BRACKET
+  | R_BRACKET
   | COMMA
   (* operations *)
   | ADD
@@ -73,6 +75,8 @@ let rec format_token (t : token) : string =
   | R_PAREN -> "')'"
   | L_BRACE -> "'{'"
   | R_BRACE -> "'}'"
+  | L_BRACKET -> "'['"
+  | R_BRACKET -> "']'"
   | COMMA -> "','"
   (* operations *)
   | ADD -> "+"
@@ -123,6 +127,8 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
       | ')' -> (Some R_PAREN, rest)
       | '{' -> (Some L_BRACE, rest)
       | '}' -> (Some R_BRACE, rest)
+      | '[' -> (Some L_BRACKET, rest)
+      | ']' -> (Some R_BRACKET, rest)
       | ',' -> (Some COMMA, rest)
       (* operations *)
       | '+' -> (
