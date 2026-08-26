@@ -125,8 +125,7 @@
   IDENTIFIER: if
   '('
   IDENTIFIER: b
-  '='
-  '='
+  '=='
   NUMBER 0
   ')'
   '{'

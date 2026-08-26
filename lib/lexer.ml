@@ -15,6 +15,7 @@ type token =
   | OPTION
   | SOME
   | NONE
+  | ASSIGNMENT
   | WHITESPACE
   | SEMICOLON
   | L_PAREN
@@ -77,6 +78,7 @@ let rec format_token (t : token) : string =
   | OPTION -> "'OPTION'"
   | SOME -> "'SOME'"
   | NONE -> "'NONE'"
+  | ASSIGNMENT -> "'='"
   | WHITESPACE -> "WHITESPACE"
   | SEMICOLON -> "';'"
   | L_PAREN -> "'('"
@@ -93,7 +95,7 @@ let rec format_token (t : token) : string =
   | DIVIDE -> "'/'"
   | MOD -> "'%'"
   | POW -> "'^'"
-  | EQUALS -> "'='"
+  | EQUALS -> "'=='"
   | NOT_EQUALS -> "!="
   | LESS_THAN -> "'<'"
   | LESS_THAN_EQUALS -> "'<="
@@ -178,7 +180,7 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
       | '/' -> (Some DIVIDE, rest)
       | '^' -> (Some POW, rest)
       | '%' -> (Some MOD, rest)
-      | '=' -> (Some EQUALS, rest)
+      | '=' -> (Some ASSIGNMENT, rest)
       | '>' -> (Some GREATER_THAN, rest)
       | '<' -> (Some LESS_THAN, rest)
       | _ -> (None, c :: rest))
@@ -217,6 +219,7 @@ let rec tokenize_helper (accum : token list) (prog : string list) : token list =
       | "None" -> tokenize_helper (NONE :: accum) rest
       (* | _ -> raise Unknown_token) *)
       (* operations *)
+      | "==" -> tokenize_helper (EQUALS :: accum) rest
       | "!=" -> tokenize_helper (NOT_EQUALS :: accum) rest
       | "<=" -> tokenize_helper (LESS_THAN_EQUALS :: accum) rest
       | ">=" -> tokenize_helper (GREATER_THAN_EQUALS :: accum) rest

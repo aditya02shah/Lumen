@@ -14,6 +14,7 @@ type token =
   | OPTION
   | SOME
   | NONE
+  | ASSIGNMENT
   | WHITESPACE
   | SEMICOLON
   | L_PAREN
