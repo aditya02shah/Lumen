@@ -9,8 +9,12 @@ type token =
   | FOR
   | WHILE
   | RETURN
-  | MUT (* syntax *)
+  | MUT 
+  (* syntax *)
   | DATATYPE of dtype
+  | OPTION
+  | SOME
+  | NONE
   | WHITESPACE
   | SEMICOLON
   | L_PAREN
@@ -69,6 +73,9 @@ let rec format_token (t : token) : string =
   (* syntax *)
   | DATATYPE d -> (
       match d with INT -> "DATATYPE: INT" | BOOL -> "DATATYPE: BOOL")
+  | OPTION -> "'OPTION'"
+  | SOME -> "'SOME'"
+  | NONE -> "'NONE'"
   | WHITESPACE -> "WHITESPACE"
   | SEMICOLON -> "';'"
   | L_PAREN -> "'('"
@@ -96,6 +103,7 @@ let rec format_token (t : token) : string =
   | UNKNOWN x -> "<UNK ='" ^ x ^ "'>"
 
 let rec print_list (format_element : 'a -> string) (l : 'a list) : unit =
+  (* prints every element of the list *)
   match l with
   | [] -> ()
   | x :: xs ->
@@ -103,6 +111,7 @@ let rec print_list (format_element : 'a -> string) (l : 'a list) : unit =
       print_list format_element xs
 
 let rec merge_partial_token (acc : accum) : token option =
+  (* tries to combines partial tokens into a complete token *)
   match acc with
   | Empty -> None
   | Accum (chars, tok_type) -> (
@@ -111,6 +120,16 @@ let rec merge_partial_token (acc : accum) : token option =
       | CHAR -> Some (IDENTIFIER (string_of_char_list (List.rev chars)))
       | WS -> Some WHITESPACE)
 
+let rec match_characters(chars: char list) (target: char list): char list option = 
+  (* match target to chars and return rest of chars *)
+    match chars, target with
+      | [], [] -> Some []
+      | rest, [] -> Some rest
+      | [], t -> None
+      | c::cs, t::ts -> 
+          if c = t then match_characters cs ts
+          else None
+
 let rec get_token (chars : char list) (acc : accum) : token option * char list =
   (* match token and returns the rest of the characters *)
   match (chars, acc) with
@@ -118,8 +137,26 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
   | [], acc -> (merge_partial_token acc, [])
   | c :: rest, Empty -> (
       match c with
+      | 'O' -> (* Option *)
+        (match match_characters rest (string_to_char_list "ption") with
+        | Some remaining -> (Some OPTION, remaining)
+        | None -> get_token rest (Accum ([ c ], CHAR))
+        )
+      | 'S' -> (* Some *)
+        (match match_characters rest (string_to_char_list "ome") with
+        | Some remaining -> (Some SOME, remaining)
+        | None -> get_token rest (Accum ([ c ], CHAR))
+        )
+      | 'N' -> (* None *)
+        (match match_characters rest (string_to_char_list "one") with
+        | Some remaining -> (Some NONE, remaining)
+        | None -> get_token rest (Accum ([ c ], CHAR))
+        )
+      (* words *)
       | 'a' .. 'z' | 'A' .. 'Z' -> get_token rest (Accum ([ c ], CHAR))
+      (* numbers *)
       | '0' .. '9' -> get_token rest (Accum ([ c ], DIGIT))
+      (* whitespace *)
       | ' ' | '\t' | '\n' | '\r' -> get_token rest (Accum ([ c ], WS))
       (* syntax *)
       | ';' -> (Some SEMICOLON, rest)
@@ -160,6 +197,7 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
       | _ -> (merge_partial_token acc, c :: rest))
 
 let rec tokenize_helper (accum : token list) (prog : string list) : token list =
+  (* helps tokenizes input list *)
   match prog with
   | [] -> accum
   | word :: rest -> (
@@ -172,6 +210,9 @@ let rec tokenize_helper (accum : token list) (prog : string list) : token list =
       (* syntax *)
       | "int" -> tokenize_helper (DATATYPE INT :: accum) rest
       | "bool" -> tokenize_helper (DATATYPE BOOL :: accum) rest
+      | "Option" -> tokenize_helper (OPTION:: accum) rest
+      | "Some" -> tokenize_helper (SOME:: accum) rest
+      | "None" -> tokenize_helper (NONE:: accum) rest
       (* | _ -> raise Unknown_token) *)
       (* operations *)
       | "!=" -> tokenize_helper (NOT_EQUALS :: accum) rest
@@ -191,6 +232,7 @@ let rec tokenize_helper (accum : token list) (prog : string list) : token list =
               tokenize_helper (t :: accum) (string_of_char_list r :: rest)))
 
 let rec tokenize (prog : string) : token list =
+  (* processes input string & tokenizes it *)
   String.split_on_char ' ' prog (* split program based on whitespace *)
   |> List.filter (fun s -> s <> "") (* remove empty strings *)
   |> tokenize_helper [] |> List.rev (* tokenize*)
