@@ -178,7 +178,7 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
       | '=' -> (Some EQUALS, rest)
       | '>' -> (Some GREATER_THAN, rest)
       | '<' -> (Some LESS_THAN, rest)
-      | _ -> (None, rest))
+      | _ -> (None, c :: rest))
   | c :: rest, Accum (partials, tok_type) -> (
       match c with
       | 'a' .. 'z' | 'A' .. 'Z' -> (
