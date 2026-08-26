@@ -96,6 +96,8 @@
   IDENTIFIER: x
   '='
   NUMBER 10
+  '^'
+  NUMBER 2
   ';'
   WHITESPACE
   RETURN

@@ -30,6 +30,7 @@ type token =
   | MULTIPLY
   | DIVIDE
   | MOD
+  | POW
   | EQUALS
   | NOT_EQUALS
   | LESS_THAN
@@ -91,6 +92,7 @@ let rec format_token (t : token) : string =
   | MULTIPLY -> "'*'"
   | DIVIDE -> "'/'"
   | MOD -> "'%'"
+  | POW -> "'^'"
   | EQUALS -> "'='"
   | NOT_EQUALS -> "!="
   | LESS_THAN -> "'<'"
@@ -174,6 +176,7 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
       | '-' -> (Some SUBTRACT, rest)
       | '*' -> (Some MULTIPLY, rest)
       | '/' -> (Some DIVIDE, rest)
+      | '^' -> (Some POW, rest)
       | '%' -> (Some MOD, rest)
       | '=' -> (Some EQUALS, rest)
       | '>' -> (Some GREATER_THAN, rest)

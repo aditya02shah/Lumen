@@ -29,6 +29,7 @@ type token =
   | MULTIPLY
   | DIVIDE
   | MOD
+  | POW
   | EQUALS
   | NOT_EQUALS
   | LESS_THAN
