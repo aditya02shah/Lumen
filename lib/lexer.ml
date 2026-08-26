@@ -9,7 +9,7 @@ type token =
   | FOR
   | WHILE
   | RETURN
-  | MUT 
+  | MUT
   (* syntax *)
   | DATATYPE of dtype
   | OPTION
@@ -120,15 +120,14 @@ let rec merge_partial_token (acc : accum) : token option =
       | CHAR -> Some (IDENTIFIER (string_of_char_list (List.rev chars)))
       | WS -> Some WHITESPACE)
 
-let rec match_characters(chars: char list) (target: char list): char list option = 
+let rec match_characters (chars : char list) (target : char list) :
+    char list option =
   (* match target to chars and return rest of chars *)
-    match chars, target with
-      | [], [] -> Some []
-      | rest, [] -> Some rest
-      | [], t -> None
-      | c::cs, t::ts -> 
-          if c = t then match_characters cs ts
-          else None
+  match (chars, target) with
+  | [], [] -> Some []
+  | rest, [] -> Some rest
+  | [], t -> None
+  | c :: cs, t :: ts -> if c = t then match_characters cs ts else None
 
 let rec get_token (chars : char list) (acc : accum) : token option * char list =
   (* match token and returns the rest of the characters *)
@@ -137,21 +136,21 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
   | [], acc -> (merge_partial_token acc, [])
   | c :: rest, Empty -> (
       match c with
-      | 'O' -> (* Option *)
-        (match match_characters rest (string_to_char_list "ption") with
-        | Some remaining -> (Some OPTION, remaining)
-        | None -> get_token rest (Accum ([ c ], CHAR))
-        )
-      | 'S' -> (* Some *)
-        (match match_characters rest (string_to_char_list "ome") with
-        | Some remaining -> (Some SOME, remaining)
-        | None -> get_token rest (Accum ([ c ], CHAR))
-        )
-      | 'N' -> (* None *)
-        (match match_characters rest (string_to_char_list "one") with
-        | Some remaining -> (Some NONE, remaining)
-        | None -> get_token rest (Accum ([ c ], CHAR))
-        )
+      | 'O' -> (
+          (* Option *)
+          match match_characters rest (string_to_char_list "ption") with
+          | Some remaining -> (Some OPTION, remaining)
+          | None -> get_token rest (Accum ([ c ], CHAR)))
+      | 'S' -> (
+          (* Some *)
+          match match_characters rest (string_to_char_list "ome") with
+          | Some remaining -> (Some SOME, remaining)
+          | None -> get_token rest (Accum ([ c ], CHAR)))
+      | 'N' -> (
+          (* None *)
+          match match_characters rest (string_to_char_list "one") with
+          | Some remaining -> (Some NONE, remaining)
+          | None -> get_token rest (Accum ([ c ], CHAR)))
       (* words *)
       | 'a' .. 'z' | 'A' .. 'Z' -> get_token rest (Accum ([ c ], CHAR))
       (* numbers *)
@@ -210,9 +209,9 @@ let rec tokenize_helper (accum : token list) (prog : string list) : token list =
       (* syntax *)
       | "int" -> tokenize_helper (DATATYPE INT :: accum) rest
       | "bool" -> tokenize_helper (DATATYPE BOOL :: accum) rest
-      | "Option" -> tokenize_helper (OPTION:: accum) rest
-      | "Some" -> tokenize_helper (SOME:: accum) rest
-      | "None" -> tokenize_helper (NONE:: accum) rest
+      | "Option" -> tokenize_helper (OPTION :: accum) rest
+      | "Some" -> tokenize_helper (SOME :: accum) rest
+      | "None" -> tokenize_helper (NONE :: accum) rest
       (* | _ -> raise Unknown_token) *)
       (* operations *)
       | "!=" -> tokenize_helper (NOT_EQUALS :: accum) rest

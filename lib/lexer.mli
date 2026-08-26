@@ -8,7 +8,7 @@ type token =
   | FOR
   | WHILE
   | RETURN
-  | MUT 
+  | MUT
   (* syntax *)
   | DATATYPE of dtype
   | OPTION
@@ -39,6 +39,7 @@ type token =
   | LOGICAL_OR
   | INCREMENT
   | UNKNOWN of string (* TODO *)
+
 exception Unknown_token
 
 val tokenize : string -> token list
