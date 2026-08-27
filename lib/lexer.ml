@@ -41,7 +41,7 @@ type token =
   | LOGICAL_AND
   | LOGICAL_OR
   | INCREMENT
-  | UNKNOWN of string (* TODO *)
+  | UNKNOWN of string (* unrecognized tokens *)
 
 type partial_token =
   (* helps handle tokens spanning multiple characters *)
@@ -54,8 +54,7 @@ type accum =
   | Accum of char list * partial_token
   | Empty
 
-exception Unknown_token
-
+(* --helper functions-- *)
 let int_of_char_list chars =
   chars |> List.to_seq |> String.of_seq |> int_of_string
 
@@ -183,7 +182,7 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
       | '=' -> (Some ASSIGNMENT, rest)
       | '>' -> (Some GREATER_THAN, rest)
       | '<' -> (Some LESS_THAN, rest)
-      | _ -> (None, c :: rest))
+      | _ -> (None, rest))
   | c :: rest, Accum (partials, tok_type) -> (
       match c with
       | 'a' .. 'z' | 'A' .. 'Z' -> (
@@ -236,8 +235,16 @@ let rec tokenize_helper (accum : token list) (prog : string list) : token list =
           | Some t, r ->
               tokenize_helper (t :: accum) (string_of_char_list r :: rest)))
 
-let rec tokenize (prog : string) : token list =
-  (* processes input string & tokenizes it *)
-  String.split_on_char ' ' prog (* split program based on whitespace *)
-  |> List.filter (fun s -> s <> "") (* remove empty strings *)
-  |> tokenize_helper [] |> List.rev (* tokenize*)
+(* --main functions-- *)
+let rec tokenize (prog : string) : token list * token list =
+  (* tokenizes input, records errors and returns both results *)
+  let tokens =
+    String.split_on_char ' ' prog (* split program based on whitespace *)
+    |> List.filter (fun s -> s <> "") (* remove empty strings *)
+    |> tokenize_helper [] |> List.rev (* tokenize *)
+  in
+
+  let errors =
+    List.filter (fun x -> match x with UNKNOWN a -> true | _ -> false) tokens
+  in
+  (tokens, errors)

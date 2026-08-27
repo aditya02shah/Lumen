@@ -186,3 +186,39 @@
   ';'
   WHITESPACE
   '}'
+
+  $ ../../bin/main.exe ../../examples/err.sui
+  DATATYPE: INT
+  IDENTIFIER: main
+  '('
+  ')'
+  '{'
+  WHITESPACE
+  <UNK ='?'>
+  DATATYPE: INT
+  IDENTIFIER: x
+  '='
+  NUMBER 5
+  ';'
+  WHITESPACE
+  IDENTIFIER: x
+  '='
+  NUMBER 10
+  '^'
+  NUMBER 2
+  <UNK =':
+  
+  '>
+  WHITESPACE
+  RETURN
+  NUMBER 0
+  ';'
+  WHITESPACE
+  '}'
+  WHITESPACE
+  
+  ERRORS:
+  <UNK ='?'>
+  <UNK =':
+  
+  '>
