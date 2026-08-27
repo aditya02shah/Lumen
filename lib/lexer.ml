@@ -244,6 +244,7 @@ let rec tokenize (prog : string) : token list * token list =
     |> tokenize_helper [] |> List.rev (* tokenize *)
   in
 
+  (* accumulate unknown tokens *)
   let errors =
     List.filter (fun x -> match x with UNKNOWN a -> true | _ -> false) tokens
   in

@@ -42,7 +42,6 @@ type token =
   | INCREMENT
   | UNKNOWN of string (* unrecognized tokens *)
 
-(* val tokenize : string -> token list *)
 val tokenize : string -> token list * token list
 val print_list : ('a -> string) -> 'a list -> unit
 val format_token : token -> string
