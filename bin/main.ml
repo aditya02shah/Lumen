@@ -31,5 +31,5 @@ let tokens2 =
 
 let () =
   match Parser.match_expr tokens2 with
-  | Some e, _ -> print_endline (Parser.format_expr e)
-  | None, _ -> print_endline "not found"
+  | [], _ -> print_endline "not found"
+  | es, _ -> List.iter (fun e -> print_endline (Parser.format_expr e)) es

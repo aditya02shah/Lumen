@@ -24,6 +24,8 @@ type expr =
   (* binary *)
   | BINARY of operator * expr * expr
 
+exception Invalid_expr
+
 let rec format_expr expr =
   match expr with
   | INT n -> Printf.sprintf "INT(%d)" n
@@ -54,53 +56,69 @@ let rec peek (t : Lexer.token list) (expected : Lexer.token) : bool =
   | [] -> false
   | token :: rem -> if token = expected then true else false
 
-let rec match_expr (t : Lexer.token list) : expr option * Lexer.token list =
+let rec match_expr (tokens : Lexer.token list) : expr list * Lexer.token list =
   (* returns an expression along with the remaining tokens *)
   (* expr -> term (("+" | "-") term)* *)
-  match t with
-  | [] -> (None, t)
-  | token :: rem -> (
+  match tokens with
+  | [] -> ([], tokens)
+  | token :: rem_tokens -> (
       (* match a term *)
-      match match_term (token :: rem) with
-      | Some t1, r1 :: r2 -> (
-          (* match +|- *)
-          let op =
-            if peek (r1 :: r2) Lexer.ADD = true then Some ADD
-            else if peek (r1 :: r2) Lexer.SUBTRACT = true then Some SUBTRACT
-            else None
+      match match_term (token :: rem_tokens) with
+      | e :: es, r ->
+          let rec loop (t : Lexer.token list) (accum : expr list) :
+              expr list * Lexer.token list =
+            match t with
+            | [] -> (accum, [])
+            | x :: xs -> (
+                let op =
+                  if peek (x :: xs) Lexer.ADD = true then Some ADD
+                  else if peek (x :: xs) Lexer.SUBTRACT = true then
+                    Some SUBTRACT
+                  else None
+                in
+                match op with
+                | Some op -> (
+                    match (match_term xs, accum) with
+                    | (subexpr :: exprs, rem), a :: acs ->
+                        loop rem ((BINARY (op, a, subexpr) :: exprs) @ acs)
+                    | (tok :: ts, rem), [] -> raise Invalid_expr
+                    | _, _ -> (accum, x :: xs))
+                | None -> (accum, x :: xs))
           in
-          match op with
-          (* match another term *)
-          | Some op -> (
-              match match_term r2 with
-              | Some t2, r3 -> (Some (BINARY (op, t1, t2)), r3)
-              | _ -> (Some t1, r1 :: r2))
-          | None -> (Some t1, r1 :: r2))
-      | _, _ -> (None, rem))
+          loop r (e :: es)
+      | [], [] -> ([], [])
+      | [], r -> ([], r))
 
-and match_term (t : Lexer.token list) : expr option * Lexer.token list =
-  (* returns a term along with the remaining tokens *)
-  (* term -> factor (("*" | "/") factor)* *)
-  match t with
-  | [] -> (None, t)
-  | token :: rem -> (
-      (* match a factor *)
-      match match_factor (token :: rem) with
-      | Some f1, r1 :: r2 -> (
-          (* match *|/ *)
-          let op =
-            if peek (r1 :: r2) Lexer.MULTIPLY then Some MULTIPLY
-            else if peek (r1 :: r2) Lexer.DIVIDE then Some DIVIDE
-            else None
+and match_term (tokens : Lexer.token list) : expr list * Lexer.token list =
+  (* returns an expression along with the remaining tokens *)
+  (* expr -> term (("+" | "-") term)* *)
+  match tokens with
+  | [] -> ([], tokens) (* no expression found *)
+  | token :: rem_tokens -> (
+      (* match a term *)
+      match match_factor (token :: rem_tokens) with
+      | Some e, r ->
+          let rec loop (t : Lexer.token list) (accum : expr list) :
+              expr list * Lexer.token list =
+            match t with
+            | [] -> (accum, [])
+            | x :: xs -> (
+                let op =
+                  if peek (x :: xs) Lexer.MULTIPLY = true then Some MULTIPLY
+                  else if peek (x :: xs) Lexer.DIVIDE = true then Some DIVIDE
+                  else None
+                in
+                match op with
+                | Some op -> (
+                    match (match_factor xs, accum) with
+                    | (Some subexpr, rem), a :: acs ->
+                        loop rem (BINARY (op, a, subexpr) :: acs)
+                    | (Some subexpr, rem), [] -> raise Invalid_expr
+                    | _, _ -> (accum, x :: xs))
+                | None -> (accum, x :: xs))
           in
-          match op with
-          (* match another term *)
-          | Some op -> (
-              match match_factor r2 with
-              | Some f2, r3 -> (Some (BINARY (op, f1, f2)), r3)
-              | _ -> (Some f1, r1 :: r2))
-          | None -> (Some f1, r1 :: r2))
-      | _, _ -> (None, rem))
+          loop r [ e ]
+      | _, _ -> ([], token :: rem_tokens))
 
 and match_factor (t : Lexer.token list) : expr option * Lexer.token list =
   (* returns a factor along with the remaining tokens *)
@@ -112,10 +130,10 @@ and match_factor (t : Lexer.token list) : expr option * Lexer.token list =
       (* match a number *)
       | NUMBER i -> (Some (INT i), rem)
       (* match parenthesis *)
-      | L_PAREN -> (
+      (* | L_PAREN -> (
           match match_expr rem with
           | Some e, r1 :: r2 ->
               if peek (r1 :: r2) R_PAREN = true then (Some e, r2)
               else (None, rem)
-          | _, _ -> (None, rem))
+          | _, _ -> (None, rem)) *)
       | _ -> (None, rem))
