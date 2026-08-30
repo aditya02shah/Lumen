@@ -23,3 +23,56 @@ type expr =
   | INCREMENT of expr
   (* binary *)
   | BINARY of operator * expr * expr
+
+let rec peek (t : Lexer.token list) (expected : Lexer.token) : bool =
+  match t with
+  | [] -> false
+  | token :: rem -> if token = expected then true else false
+
+let rec match_expr (t : Lexer.token list) : expr option * Lexer.token list =
+  match t with
+  | [] -> (None, t)
+  | token :: rem -> (
+      match match_term (token :: rem) with
+      | Some t1, r1 :: r2 ->
+          if peek (r1 :: r2) Lexer.ADD = true then
+            match match_term r2 with
+            | Some t2, r3 -> (Some (BINARY (ADD, t1, t2)), r3)
+            | _ -> (None, rem)
+          else if peek (r1 :: r2) Lexer.SUBTRACT = true then
+            match match_term r2 with
+            | Some t2, r3 -> (Some (BINARY (SUBTRACT, t1, t2)), r3)
+            | _ -> (None, rem)
+          else (None, rem)
+      | _, _ -> (None, rem))
+
+and match_term (t : Lexer.token list) : expr option * Lexer.token list =
+  match t with
+  | [] -> (None, t)
+  | token :: rem -> (
+      match match_factor (token :: rem) with
+      | Some f1, r1 :: r2 ->
+          if peek (r1 :: r2) Lexer.MULTIPLY = true then
+            match match_factor r2 with
+            | Some f2, r3 -> (Some (BINARY (MULTIPLY, f1, f2)), r3)
+            | _ -> (None, rem)
+          else if peek (r1 :: r2) Lexer.DIVIDE = true then
+            match match_factor r2 with
+            | Some f2, r3 -> (Some (BINARY (DIVIDE, f1, f2)), r3)
+            | _ -> (None, rem)
+          else (None, rem)
+      | _, _ -> (None, rem))
+
+and match_factor (t : Lexer.token list) : expr option * Lexer.token list =
+  match t with
+  | [] -> (None, t)
+  | token :: rem -> (
+      match token with
+      | NUMBER i -> (Some (INT i), rem)
+      | L_PAREN -> (
+          match match_expr rem with
+          | Some e, r1 :: r2 ->
+              if peek (r1 :: r2) R_PAREN = true then (Some e, r2)
+              else (None, rem)
+          | _, _ -> (None, rem))
+      | _ -> (None, rem))
