@@ -1,24 +1,13 @@
 (* expression *)
 
-type operator =
-  | ADD
-  | MULTIPLY
-  | SUBTRACT
-  | DIVIDE
-  | MOD
-  | POW
-  | LESS_THAN
-  | LESS_THAN_EQUALS
-  | GREATER_THAN_EQUALS
-  | GREATER_THAN
-  | LOGICAL_AND
-  | LOGICAL_OR
+type arithmetic_op = ADD | MULTIPLY | SUBTRACT | DIVIDE | MOD | POW
 
 type expr =
   | INT of int
   | STRING of string
   | INCREMENT of expr
-  | BINARY of operator * expr * expr
+  | BINARY of arithmetic_op * expr * expr
+(* TODO: logical ops *)
 
 exception Invalid_expr
 
@@ -36,22 +25,24 @@ let rec format_expr expr =
         | DIVIDE -> "DIVIDE"
         | MOD -> "MOD"
         | POW -> "POW"
-        | LESS_THAN -> "LESS_THAN"
+        (* | LESS_THAN -> "LESS_THAN"
         | LESS_THAN_EQUALS -> "LESS_THAN_EQUALS"
         | GREATER_THAN -> "GREATER_THAN"
         | GREATER_THAN_EQUALS -> "GREATER_THAN_EQUALS"
         | LOGICAL_AND -> "LOGICAL_AND"
-        | LOGICAL_OR -> "LOGICAL_OR"
+        | LOGICAL_OR -> "LOGICAL_OR" *)
       in
       Printf.sprintf "BINARY(%s, %s, %s)" op_str (format_expr e1)
         (format_expr e2)
 
-let rec peek (t : Lexer.token list) (expected : Lexer.token) : bool =
+let rec match_next_token (t : Lexer.token list) (expected : Lexer.token) : bool
+    =
   (* returns true if expected matches first token in list, false otherwise *)
   match t with
   | [] -> false
   | token :: rem -> if token = expected then true else false
 
+(* EXPRESSION *)
 let rec match_expr (tokens : Lexer.token list) : expr list * Lexer.token list =
   (* returns an expression along with the remaining tokens *)
   (* expr -> term (("+" | "-") term)* *)
@@ -69,8 +60,8 @@ let rec match_expr (tokens : Lexer.token list) : expr list * Lexer.token list =
             | x :: xs -> (
                 (* try to find an operator *)
                 let op =
-                  if peek (x :: xs) Lexer.ADD = true then Some ADD
-                  else if peek (x :: xs) Lexer.SUBTRACT = true then
+                  if match_next_token (x :: xs) Lexer.ADD = true then Some ADD
+                  else if match_next_token (x :: xs) Lexer.SUBTRACT = true then
                     Some SUBTRACT
                   else None
                 in
@@ -105,8 +96,10 @@ and match_term (tokens : Lexer.token list) : expr list * Lexer.token list =
             | x :: xs -> (
                 (* try to find an operator *)
                 let op =
-                  if peek (x :: xs) Lexer.MULTIPLY = true then Some MULTIPLY
-                  else if peek (x :: xs) Lexer.DIVIDE = true then Some DIVIDE
+                  if match_next_token (x :: xs) Lexer.MULTIPLY = true then
+                    Some MULTIPLY
+                  else if match_next_token (x :: xs) Lexer.DIVIDE = true then
+                    Some DIVIDE
                   else None
                 in
                 match op with
