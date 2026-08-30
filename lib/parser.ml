@@ -96,7 +96,7 @@ and match_term (tokens : Lexer.token list) : expr list * Lexer.token list =
   | token :: rem_tokens -> (
       (* try to match a factor *)
       match match_factor (token :: rem_tokens) with
-      | Some e, r ->
+      | e :: es, r ->
           (* found a factor; handle all occurrences of (("*" | "/") factor) *)
           let rec loop (t : Lexer.token list) (accum : expr list) :
               expr list * Lexer.token list =
@@ -112,30 +112,33 @@ and match_term (tokens : Lexer.token list) : expr list * Lexer.token list =
                 match op with
                 | Some op -> (
                     match (match_factor xs, accum) with
-                    | (Some subexpr, rem), a :: acs ->
+                    | (f :: fs, rem), a :: acs ->
                         (* try to match more occurrences *)
-                        loop rem (BINARY (op, a, subexpr) :: acs)
-                    | (Some subexpr, rem), [] -> raise Invalid_expr
+                        loop rem ((BINARY (op, a, f) :: fs) @ acs)
+                    | (f :: fs, rem), [] -> raise Invalid_expr
                     | _, _ -> (accum, x :: xs))
                 | None -> (accum, x :: xs))
           in
-          loop r [ e ]
-      | _, _ -> ([], token :: rem_tokens))
+          loop r (e :: es)
+      | [], [] -> ([], [])
+      | [], r -> ([], r))
 
-and match_factor (t : Lexer.token list) : expr option * Lexer.token list =
+and match_factor (tokens : Lexer.token list) : expr list * Lexer.token list =
   (* returns a factor along with the remaining tokens *)
   (* factor -> Number | "(" expr ")" *)
-  match t with
-  | [] -> (None, t)
-  | token :: rem -> (
+  match tokens with
+  | [] -> ([], tokens)
+  | token :: rem_tokens -> (
       match token with
-      (* match a number *)
-      | NUMBER i -> (Some (INT i), rem)
-      (* match parenthesis *)
-      (* | L_PAREN -> (
-          match match_expr rem with
-          | Some e, r1 :: r2 ->
-              if peek (r1 :: r2) R_PAREN = true then (Some e, r2)
-              else (None, rem)
-          | _, _ -> (None, rem)) *)
-      | _ -> (None, rem))
+      (* try to match a number *)
+      | NUMBER i -> ([ INT i ], rem_tokens)
+      (* try to match ( *)
+      | L_PAREN -> (
+          (* try to match an expression *)
+          match match_expr rem_tokens with
+          | e :: es, t :: r ->
+              (* try to match ) *)
+              if peek (t :: r) R_PAREN = true then (e :: es, r)
+              else ([], token :: rem_tokens)
+          | _, _ -> ([], token :: rem_tokens))
+      | _ -> ([], token :: rem_tokens))
