@@ -24,6 +24,30 @@ type expr =
   (* binary *)
   | BINARY of operator * expr * expr
 
+let rec format_expr expr =
+  match expr with
+  | INT n -> Printf.sprintf "INT(%d)" n
+  | STRING s -> Printf.sprintf "STRING(%S)" s
+  | INCREMENT e -> Printf.sprintf "INCREMENT(%s)" (format_expr e)
+  | BINARY (op, e1, e2) ->
+      let op_str =
+        match op with
+        | ADD -> "ADD"
+        | MULTIPLY -> "MULTIPLY"
+        | SUBTRACT -> "SUBTRACT"
+        | DIVIDE -> "DIVIDE"
+        | MOD -> "MOD"
+        | POW -> "POW"
+        | LESS_THAN -> "LESS_THAN"
+        | LESS_THAN_EQUALS -> "LESS_THAN_EQUALS"
+        | GREATER_THAN -> "GREATER_THAN"
+        | GREATER_THAN_EQUALS -> "GREATER_THAN_EQUALS"
+        | LOGICAL_AND -> "LOGICAL_AND"
+        | LOGICAL_OR -> "LOGICAL_OR"
+      in
+      Printf.sprintf "BINARY(%s, %s, %s)" op_str (format_expr e1)
+        (format_expr e2)
+
 let rec peek (t : Lexer.token list) (expected : Lexer.token) : bool =
   match t with
   | [] -> false
