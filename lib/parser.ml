@@ -131,7 +131,51 @@ and match_factor (tokens : Lexer.token list) : expr list * Lexer.token list =
           match match_expr rem_tokens with
           | e :: es, t :: r ->
               (* try to match ) *)
-              if peek (t :: r) R_PAREN = true then (e :: es, r)
+              if match_next_token (t :: r) R_PAREN = true then (e :: es, r)
               else ([], token :: rem_tokens)
           | _, _ -> ([], token :: rem_tokens))
       | _ -> ([], token :: rem_tokens))
+
+type varName = IDENT of string
+type asst = { name : varName; expr : expr }
+
+let format_asst (a : asst option) : string =
+  match a with
+  | Some x ->
+      let name_str = match x.name with IDENT n -> n in
+      name_str ^ " = " ^ format_expr x.expr
+  | None -> "Not found"
+
+let rec match_varname (tokens : Lexer.token list) :
+    varName option * Lexer.token list =
+  (* varName -> IDENT *)
+  match tokens with
+  | [] -> (None, tokens)
+  | token :: rem_tokens -> (
+      (* try to match IDENT *)
+      match token with
+      | IDENTIFIER name -> (Some (IDENT name), rem_tokens)
+      | _ -> (None, tokens))
+
+let rec match_asst (tokens : Lexer.token list) : asst option * Lexer.token list
+    =
+  (* asst -> varName "=" expr ";" *)
+  match tokens with
+  | [] -> (None, tokens)
+  | token :: rem_tokens -> (
+      (* try to match varname *)
+      match match_varname (token :: rem_tokens) with
+      | Some name, t1 :: r1 -> (
+          match t1 with
+          (* try to match "=" *)
+          | ASSIGNMENT -> (
+              (* try to match expr *)
+              match match_expr r1 with
+              | e :: es, t2 :: r2 -> (
+                  match t2 with
+                  (* try to match ";" *)
+                  | SEMICOLON -> (Some { name; expr = e }, r2)
+                  | _ -> (None, tokens))
+              | _, _ -> (None, tokens))
+          | _ -> (None, tokens))
+      | _, _ -> (None, tokens))
