@@ -68,11 +68,20 @@ let test_match_expr2 _ =
   | [], _ -> assert_failure "not found"
   | e :: _, _rest -> assert_equal ~printer:format_expr expected2 e
 
+let asst_tokens =
+  [ Lexer.IDENTIFIER "x"; Lexer.ASSIGNMENT; Lexer.NUMBER 5; Lexer.SEMICOLON ]
+
+let test_match_asst _ =
+  match match_asst asst_tokens with
+  | None, _ -> assert_failure "not found"
+  | Some a, _rest -> assert_equal "x = INT(5)" (format_asst (Some a))
+
 let suite =
   "parser tests"
   >::: [
          "match_expr tokens" >:: test_match_expr;
          "match_expr tokens2 (with parens)" >:: test_match_expr2;
+         "match_asst asst_tokens" >:: test_match_asst;
        ]
 
 let () = run_test_tt_main suite
