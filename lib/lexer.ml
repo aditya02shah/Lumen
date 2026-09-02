@@ -4,6 +4,7 @@ type dtype = INT | BOOL (* supported datatypes *)
 type token =
   (* data *)
   | NUMBER of int
+  | BOOLEAN of bool
   | IDENTIFIER of string
   (* keywords *)
   | FOR
@@ -65,6 +66,7 @@ let format_token (t : token) : string =
   match t with
   (* data *)
   | NUMBER n -> "NUMBER " ^ string_of_int n
+  | BOOLEAN b -> if b = true then "TRUE" else "FALSE"
   | IDENTIFIER x -> "IDENTIFIER: " ^ x
   (* keywords *)
   | FOR -> "FOR"

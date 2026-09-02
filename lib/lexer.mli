@@ -3,6 +3,7 @@ type dtype = INT | BOOL
 type token =
   (* data *)
   | NUMBER of int
+  | BOOLEAN of bool
   | IDENTIFIER of string
   (* keywords *)
   | FOR

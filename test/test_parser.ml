@@ -107,6 +107,28 @@ let test_match_vardecl_single _ =
   | Some _, _ -> ()
   | None, _ -> assert_failure "not found vardecl (single)"
 
+(* ARGLIST *)
+let arglist_tokens =
+  [
+    Lexer.BOOLEAN true;
+    Lexer.COMMA;
+    Lexer.BOOLEAN true;
+    Lexer.COMMA;
+    Lexer.IDENTIFIER "x";
+  ]
+
+let test_match_arglist _ =
+  match match_arglist arglist_tokens with
+  | Some _, _ -> ()
+  | None, _ -> assert_failure "not found arglist"
+
+let empty_arglist_tokens = []
+
+let test_match_arglist_empty _ =
+  match match_arglist empty_arglist_tokens with
+  | Some _, _ -> ()
+  | None, _ -> assert_failure "not found arglist (empty)"
+
 let suite =
   "parser tests"
   >::: [
@@ -115,6 +137,8 @@ let suite =
          "match_asst asst_tokens" >:: test_match_asst;
          "match_vardecl multi" >:: test_match_vardecl_multi;
          "match_vardecl single" >:: test_match_vardecl_single;
+         "match_arglist arglist_tokens" >:: test_match_arglist;
+         "match_arglist empty" >:: test_match_arglist_empty;
        ]
 
 let () = run_test_tt_main suite
