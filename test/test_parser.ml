@@ -129,6 +129,33 @@ let test_match_arglist_empty _ =
   | Some _, _ -> ()
   | None, _ -> assert_failure "not found arglist (empty)"
 
+(* FUNC CALL*)
+let funcall_tokens_empty =
+  [ Lexer.IDENTIFIER "main"; Lexer.L_PAREN; Lexer.R_PAREN; Lexer.SEMICOLON ]
+
+let test_match_funcall_empty _ =
+  match match_funcall funcall_tokens_empty with
+  | Some _, _ -> ()
+  | None, _ -> assert_failure "not found funcall (empty args)"
+
+let funcall_tokens_args =
+  [
+    Lexer.IDENTIFIER "main";
+    Lexer.L_PAREN;
+    Lexer.BOOLEAN true;
+    Lexer.COMMA;
+    Lexer.BOOLEAN true;
+    Lexer.COMMA;
+    Lexer.IDENTIFIER "p3";
+    Lexer.R_PAREN;
+    Lexer.SEMICOLON;
+  ]
+
+let test_match_funcall_args _ =
+  match match_funcall funcall_tokens_args with
+  | Some _, _ -> ()
+  | None, _ -> assert_failure "not found funcall (with args)"
+
 let suite =
   "parser tests"
   >::: [
@@ -139,6 +166,8 @@ let suite =
          "match_vardecl single" >:: test_match_vardecl_single;
          "match_arglist arglist_tokens" >:: test_match_arglist;
          "match_arglist empty" >:: test_match_arglist_empty;
+         "match_funcall empty args" >:: test_match_funcall_empty;
+         "match_funcall with args" >:: test_match_funcall_args;
        ]
 
 let () = run_test_tt_main suite
