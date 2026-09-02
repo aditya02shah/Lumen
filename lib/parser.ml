@@ -138,6 +138,7 @@ and match_factor (tokens : Lexer.token list) : expr list * Lexer.token list =
 
 type varName = IDENT of string
 type asst = { name : varName; expr : expr }
+type varDecl = { dtype : Lexer.dtype; vars : varName list }
 
 let format_asst (a : asst option) : string =
   match a with
@@ -179,3 +180,39 @@ let rec match_asst (tokens : Lexer.token list) : asst option * Lexer.token list
               | _, _ -> (None, tokens))
           | _ -> (None, tokens))
       | _, _ -> (None, tokens))
+
+let rec match_vardecl (tokens : Lexer.token list) :
+    varDecl option * Lexer.token list =
+  (* vardecl -> dtype varname ("," varname)* ";" *)
+  match tokens with
+  | [] -> (None, tokens)
+  | token :: rem_tokens -> (
+      match token with
+      (* try to match dtype *)
+      | DATATYPE dtype -> (
+          (* try to match varname *)
+          match match_varname rem_tokens with
+          | Some vname, rtok :: rem ->
+              (* check for semicolon *)
+              if match_next_token (rtok :: rem) Lexer.SEMICOLON then
+                (Some { dtype; vars = [ vname ] }, rem)
+              else
+                (* look for more varname declarations *)
+                let rec loop (t : Lexer.token list) (accum : varName list) :
+                    varDecl option * Lexer.token list =
+                  match (t, accum) with
+                  | tok :: ts, a :: acs -> (
+                      match tok with
+                      (* declaration should end with a ";" *)
+                      | SEMICOLON -> (Some { dtype; vars = a :: acs }, ts)
+                      | COMMA -> (
+                          (* try to match varname *)
+                          match match_varname ts with
+                          | Some v, r -> loop r (v :: accum)
+                          | _, _ -> (None, token :: rem_tokens))
+                      | _ -> (None, token :: rem_tokens))
+                  | _, _ -> (None, token :: rem_tokens)
+                in
+                loop (rtok :: rem) [ vname ]
+          | _ -> (None, token :: rem_tokens))
+      | _ -> (None, token :: rem_tokens))
