@@ -135,11 +135,14 @@ and match_factor (tokens : Lexer.token list) : expr list * Lexer.token list =
           | _, _ -> ([], token :: rem_tokens))
       | _ -> ([], token :: rem_tokens))
 
-type varName = IDENT of string
-type value = IDENT of string | NUMBER of int | BOOLEAN of bool
-type asst = { name : varName; expr : expr }
-type varDecl = { dtype : Lexer.dtype; vars : varName list }
+(* TYPES *)
+type ident = IDENT of string
+type value = IDENTIFIER of ident | NUMBER of int | BOOLEAN of bool
+type asst = { name : ident; expr : expr }
+type varDecl = { dtype : Lexer.dtype; vars : ident list }
 type argList = value list
+type paramList = (Lexer.dtype * ident) list
+type funcCall = { funcName : ident; args : argList }
 
 (* ASSIGNMENT *)
 let format_asst (a : asst option) : string =
@@ -261,3 +264,31 @@ let match_arglist (tokens : Lexer.token list) :
           loop rem [ v ]
       (* empty arglist *)
       | _, _ -> (Some [], token :: rem_tokens))
+
+(* FUNCTION CALL *)
+let match_funcall (tokens : Lexer.token list) :
+    funcCall option * Lexer.token list =
+  (* funcCall -> funcName "(" argList ") ";" "*)
+  match tokens with
+  | [] -> (None, tokens)
+  | token :: rem_tokens -> (
+      (* try to match funcName *)
+      match match_ident (token :: rem_tokens) with
+      | Some fname, rem_tok :: rem -> (
+          if
+            (* try to match "(" *)
+            match_next_token (rem_tok :: rem) Lexer.L_PAREN = false
+          then (None, tokens)
+          else
+            (* try to argList *)
+            match match_arglist rem with
+            | Some args, t1 :: t2 :: r ->
+                (* try to match ")" *)
+                if match_next_token (t1 :: t2 :: r) Lexer.R_PAREN = true then
+                  (* try to match ";" *)
+                  if match_next_token (t2 :: r) Lexer.SEMICOLON = true then
+                    (Some { funcName = fname; args }, r)
+                  else (None, tokens)
+                else (None, tokens)
+            | _, _ -> (None, tokens))
+      | _, _ -> (None, tokens))
