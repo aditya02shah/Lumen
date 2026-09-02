@@ -149,9 +149,8 @@ let format_asst (a : asst option) : string =
       name_str ^ " = " ^ format_expr x.expr
   | None -> "Not found"
 
-let match_varname (tokens : Lexer.token list) :
-    varName option * Lexer.token list =
-  (* varName -> IDENT *)
+let match_ident (tokens : Lexer.token list) : ident option * Lexer.token list =
+  (* IDENT -> string *)
   match tokens with
   | [] -> (None, tokens)
   | token :: rem_tokens -> (
@@ -166,7 +165,7 @@ let match_asst (tokens : Lexer.token list) : asst option * Lexer.token list =
   | [] -> (None, tokens)
   | token :: rem_tokens -> (
       (* try to match varname *)
-      match match_varname (token :: rem_tokens) with
+      match match_ident (token :: rem_tokens) with
       | Some name, t1 :: r1 -> (
           match t1 with
           (* try to match "=" *)
@@ -193,14 +192,14 @@ let match_vardecl (tokens : Lexer.token list) :
       (* try to match dtype *)
       | DATATYPE dtype -> (
           (* try to match varname *)
-          match match_varname rem_tokens with
+          match match_ident rem_tokens with
           | Some vname, rtok :: rem ->
               (* check for semicolon *)
               if match_next_token (rtok :: rem) Lexer.SEMICOLON then
                 (Some { dtype; vars = [ vname ] }, rem)
               else
                 (* look for more varname declarations *)
-                let rec loop (t : Lexer.token list) (accum : varName list) :
+                let rec loop (t : Lexer.token list) (accum : ident list) :
                     varDecl option * Lexer.token list =
                   match (t, accum) with
                   | tok :: ts, a :: acs -> (
@@ -209,7 +208,7 @@ let match_vardecl (tokens : Lexer.token list) :
                       | SEMICOLON -> (Some { dtype; vars = a :: acs }, ts)
                       | COMMA -> (
                           (* try to match varname *)
-                          match match_varname ts with
+                          match match_ident ts with
                           | Some v, r -> loop r (v :: accum)
                           | _, _ -> (None, token :: rem_tokens))
                       | _ -> (None, token :: rem_tokens))
@@ -222,14 +221,14 @@ let match_vardecl (tokens : Lexer.token list) :
 (* ARGUMENT LIST *)
 
 let match_value (tokens : Lexer.token list) : value option * Lexer.token list =
-  (* value = IDENT | INT | BOOLEAN *)
+  (* value = IDENTIFIER | INT | BOOLEAN *)
   match tokens with
   | [] -> (None, [])
   | token :: rem_tokens -> (
       match token with
       | Lexer.NUMBER n -> (Some (NUMBER n), rem_tokens)
       | Lexer.BOOLEAN b -> (Some (BOOLEAN b), rem_tokens)
-      | Lexer.IDENTIFIER i -> (Some (IDENT i), rem_tokens)
+      | Lexer.IDENTIFIER i -> (Some (IDENTIFIER (IDENT i)), rem_tokens)
       | _ -> (None, token :: rem_tokens))
 
 let match_arglist (tokens : Lexer.token list) :
