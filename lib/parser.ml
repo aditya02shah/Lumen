@@ -254,8 +254,11 @@ let match_arglist (tokens : Lexer.token list) :
                     match match_value ts with
                     | Some newval, r -> loop r (newval :: accum)
                     | _, _ -> (None, token :: rem_tokens))
-                | _ -> (None, tokens) (* invalid syntax *))
+                | _ ->
+                    (Some accum, tok :: ts)
+                    (* return arguments matched so far *))
             | [] -> (Some accum, t)
           in
           loop rem [ v ]
-      | _, _ -> (None, token :: rem_tokens))
+      (* empty arglist *)
+      | _, _ -> (Some [], token :: rem_tokens))
