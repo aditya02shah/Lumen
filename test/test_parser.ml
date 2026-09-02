@@ -3,6 +3,7 @@ open OUnit2
 open Parser
 open Lexer
 
+(* EXPRESSION PARSING *)
 let tokens =
   [
     NUMBER 2;
@@ -68,6 +69,7 @@ let test_match_expr2 _ =
   | [], _ -> assert_failure "not found"
   | e :: _, _rest -> assert_equal ~printer:format_expr expected2 e
 
+(* ASSIGNMENT *)
 let asst_tokens =
   [ Lexer.IDENTIFIER "x"; Lexer.ASSIGNMENT; Lexer.NUMBER 5; Lexer.SEMICOLON ]
 
@@ -76,12 +78,43 @@ let test_match_asst _ =
   | None, _ -> assert_failure "not found"
   | Some a, _rest -> assert_equal "x = INT(5)" (format_asst (Some a))
 
+(* VARDECL *)
+let vardecl_tokens1 =
+  [
+    Lexer.DATATYPE INT;
+    Lexer.IDENTIFIER "x";
+    Lexer.COMMA;
+    Lexer.IDENTIFIER "a";
+    Lexer.COMMA;
+    Lexer.IDENTIFIER "b";
+    Lexer.COMMA;
+    Lexer.IDENTIFIER "c";
+    Lexer.COMMA;
+    Lexer.IDENTIFIER "y";
+    Lexer.SEMICOLON;
+  ]
+
+let test_match_vardecl_multi _ =
+  match match_vardecl vardecl_tokens1 with
+  | Some _, _ -> ()
+  | None, _ -> assert_failure "not found vardecl (multi)"
+
+let vardecl_tokens2 =
+  [ Lexer.DATATYPE INT; Lexer.IDENTIFIER "x"; Lexer.SEMICOLON ]
+
+let test_match_vardecl_single _ =
+  match match_vardecl vardecl_tokens2 with
+  | Some _, _ -> ()
+  | None, _ -> assert_failure "not found vardecl (single)"
+
 let suite =
   "parser tests"
   >::: [
          "match_expr tokens" >:: test_match_expr;
          "match_expr tokens2 (with parens)" >:: test_match_expr2;
          "match_asst asst_tokens" >:: test_match_asst;
+         "match_vardecl multi" >:: test_match_vardecl_multi;
+         "match_vardecl single" >:: test_match_vardecl_single;
        ]
 
 let () = run_test_tt_main suite
