@@ -55,7 +55,7 @@ let rec match_expr (tokens : Lexer.token list) : expr list * Lexer.token list =
           let rec loop (t : Lexer.token list) (accum : expr list) :
               expr list * Lexer.token list =
             match t with
-            | [] -> (accum, [])
+            | [] -> (List.rev accum, [])
             | x :: xs -> (
                 (* try to find an operator *)
                 let op =
@@ -71,8 +71,8 @@ let rec match_expr (tokens : Lexer.token list) : expr list * Lexer.token list =
                         (* try to match more occurrences *)
                         loop rem ((BINARY (op, a, subexpr) :: exprs) @ acs)
                     | (tok :: ts, rem), [] -> raise Invalid_expr
-                    | _, _ -> (accum, x :: xs))
-                | None -> (accum, x :: xs))
+                    | _, _ -> (List.rev accum, x :: xs))
+                | None -> (List.rev accum, x :: xs))
           in
           loop r (e :: es)
       | [], [] -> ([], [])
@@ -91,7 +91,7 @@ and match_term (tokens : Lexer.token list) : expr list * Lexer.token list =
           let rec loop (t : Lexer.token list) (accum : expr list) :
               expr list * Lexer.token list =
             match t with
-            | [] -> (accum, [])
+            | [] -> (List.rev accum, [])
             | x :: xs -> (
                 (* try to find an operator *)
                 let op =
@@ -109,7 +109,7 @@ and match_term (tokens : Lexer.token list) : expr list * Lexer.token list =
                         loop rem ((BINARY (op, a, f) :: fs) @ acs)
                     | (f :: fs, rem), [] -> raise Invalid_expr
                     | _, _ -> (accum, x :: xs))
-                | None -> (accum, x :: xs))
+                | None -> (List.rev accum, x :: xs))
           in
           loop r (e :: es)
       | [], [] -> ([], [])
@@ -208,7 +208,8 @@ let match_vardecl (tokens : Lexer.token list) :
                   | tok :: ts, a :: acs -> (
                       match tok with
                       (* declaration should end with a ";" *)
-                      | SEMICOLON -> (Some { dtype; vars = a :: acs }, ts)
+                      | SEMICOLON ->
+                          (Some { dtype; vars = List.rev (a :: acs) }, ts)
                       | COMMA -> (
                           (* try to match varname *)
                           match match_ident ts with
@@ -256,9 +257,9 @@ let match_arglist (tokens : Lexer.token list) :
                     | Some newval, r -> loop r (newval :: accum)
                     | _, _ -> (None, token :: rem_tokens))
                 | _ ->
-                    (Some accum, tok :: ts)
+                    (Some (List.rev accum), tok :: ts)
                     (* return arguments matched so far *))
-            | [] -> (Some accum, t)
+            | [] -> (Some (List.rev accum), t)
           in
           loop rem [ v ]
       (* empty arglist *)
