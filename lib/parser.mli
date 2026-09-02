@@ -8,12 +8,15 @@ type expr =
   | INCREMENT of expr
   | BINARY of arithmetic_op * expr * expr
 
+type value = IDENT of string | NUMBER of int | BOOLEAN of bool
 type varName = IDENT of string
 type asst = { name : varName; expr : expr }
 type varDecl = { dtype : Lexer.dtype; vars : varName list }
+type argList = value list
 
 val match_expr : Lexer.token list -> expr list * Lexer.token list
 val format_expr : expr -> string
 val match_asst : Lexer.token list -> asst option * Lexer.token list
 val format_asst : asst option -> string
 val match_vardecl : Lexer.token list -> varDecl option * Lexer.token list
+val match_arglist : Lexer.token list -> argList option * Lexer.token list

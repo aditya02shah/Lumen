@@ -136,9 +136,12 @@ and match_factor (tokens : Lexer.token list) : expr list * Lexer.token list =
       | _ -> ([], token :: rem_tokens))
 
 type varName = IDENT of string
+type value = IDENT of string | NUMBER of int | BOOLEAN of bool
 type asst = { name : varName; expr : expr }
 type varDecl = { dtype : Lexer.dtype; vars : varName list }
+type argList = value list
 
+(* ASSIGNMENT *)
 let format_asst (a : asst option) : string =
   match a with
   | Some x ->
@@ -215,3 +218,44 @@ let match_vardecl (tokens : Lexer.token list) :
                 loop (rtok :: rem) [ vname ]
           | _ -> (None, token :: rem_tokens))
       | _ -> (None, token :: rem_tokens))
+
+(* ARGUMENT LIST *)
+
+let match_value (tokens : Lexer.token list) : value option * Lexer.token list =
+  (* value = IDENT | INT | BOOLEAN *)
+  match tokens with
+  | [] -> (None, [])
+  | token :: rem_tokens -> (
+      match token with
+      | Lexer.NUMBER n -> (Some (NUMBER n), rem_tokens)
+      | Lexer.BOOLEAN b -> (Some (BOOLEAN b), rem_tokens)
+      | Lexer.IDENTIFIER i -> (Some (IDENT i), rem_tokens)
+      | _ -> (None, token :: rem_tokens))
+
+let match_arglist (tokens : Lexer.token list) :
+    argList option * Lexer.token list =
+  (* arglist -> [] | value ("," value)* *)
+  match tokens with
+  | [] -> (Some [], tokens)
+  | token :: rem_tokens -> (
+      (* try to match value *)
+      match match_value tokens with
+      | Some v, [] -> (Some [ v ], [])
+      | Some v, rem ->
+          (* match as as many (",", value) pairs *)
+          let rec loop (t : Lexer.token list) (accum : argList) :
+              argList option * Lexer.token list =
+            match t with
+            | tok :: ts -> (
+                match tok with
+                (* try to match comma *)
+                | COMMA -> (
+                    (* try to match another value *)
+                    match match_value ts with
+                    | Some newval, r -> loop r (newval :: accum)
+                    | _, _ -> (None, token :: rem_tokens))
+                | _ -> (None, tokens) (* invalid syntax *))
+            | [] -> (Some accum, t)
+          in
+          loop rem [ v ]
+      | _, _ -> (None, token :: rem_tokens))
