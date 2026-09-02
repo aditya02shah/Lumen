@@ -156,6 +156,38 @@ let test_match_funcall_args _ =
   | Some _, _ -> ()
   | None, _ -> assert_failure "not found funcall (with args)"
 
+(* PARAM LIST *)
+let paramList_tokens =
+  [
+    Lexer.DATATYPE INT;
+    Lexer.IDENTIFIER "i1";
+    Lexer.COMMA;
+    Lexer.DATATYPE INT;
+    Lexer.IDENTIFIER "i2";
+    Lexer.COMMA;
+    Lexer.DATATYPE INT;
+    Lexer.IDENTIFIER "i3";
+  ]
+
+let empty_paramList_tokens = []
+
+let test_match_paramList _ =
+  match match_paramList paramList_tokens with
+  | Some x, _ ->
+      assert_equal
+        [
+          (Lexer.INT, IDENT "i1");
+          (Lexer.INT, IDENT "i2");
+          (Lexer.INT, IDENT "i3");
+        ]
+        x
+  | None, _ -> assert_failure "not found paramList"
+
+let test_match_paramList_empty _ =
+  match match_paramList empty_paramList_tokens with
+  | Some x, _ -> assert_equal [] x
+  | None, _ -> assert_failure "not found paramList (empty)"
+
 let suite =
   "parser tests"
   >::: [
@@ -168,6 +200,8 @@ let suite =
          "match_arglist empty" >:: test_match_arglist_empty;
          "match_funcall empty args" >:: test_match_funcall_empty;
          "match_funcall with args" >:: test_match_funcall_args;
+         "match_paramList" >:: test_match_paramList;
+         "match_paramList empty" >:: test_match_paramList_empty;
        ]
 
 let () = run_test_tt_main suite

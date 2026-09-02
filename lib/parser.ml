@@ -222,7 +222,6 @@ let match_vardecl (tokens : Lexer.token list) :
       | _ -> (None, token :: rem_tokens))
 
 (* ARGUMENT LIST *)
-
 let match_value (tokens : Lexer.token list) : value option * Lexer.token list =
   (* value = IDENTIFIER | INT | BOOLEAN *)
   match tokens with
@@ -292,3 +291,36 @@ let match_funcall (tokens : Lexer.token list) :
                 else (None, tokens)
             | _, _ -> (None, tokens))
       | _, _ -> (None, tokens))
+
+(* PARAMETER LIST *)
+let match_paramList (tokens : Lexer.token list) :
+    paramList option * Lexer.token list =
+  (* paramList -> [] | dtype Identifier ("," dtype Identifier)* *)
+  match tokens with
+  | token :: t :: rem_tokens -> (
+      (* try to match dtype *)
+      match token with
+      | DATATYPE d -> (
+          (* try to match identifier *)
+          match t with
+          | IDENTIFIER i ->
+              let rec loop (t : Lexer.token list) (accum : paramList) :
+                  paramList option * Lexer.token list =
+                match t with
+                | t1 :: t2 :: t3 :: r -> (
+                    (* match all possible (dtype identifier) pairs *)
+                    match t1 with
+                    | COMMA -> (
+                        match t2 with
+                        | DATATYPE dt -> (
+                            match t3 with
+                            | IDENTIFIER it -> loop r ((dt, IDENT it) :: accum)
+                            | _ -> (Some (List.rev accum), tokens))
+                        | _ -> (Some (List.rev accum), tokens))
+                    | _ -> (Some (List.rev accum), tokens))
+                | _ -> (Some (List.rev accum), tokens)
+              in
+              loop rem_tokens [ (d, IDENT i) ]
+          | _ -> (Some [], tokens))
+      | _ -> (Some [], tokens))
+  | _ -> (Some [], tokens)
