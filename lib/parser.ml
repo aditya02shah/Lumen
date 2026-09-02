@@ -35,8 +35,7 @@ let rec format_expr expr =
       Printf.sprintf "BINARY(%s, %s, %s)" op_str (format_expr e1)
         (format_expr e2)
 
-let rec match_next_token (t : Lexer.token list) (expected : Lexer.token) : bool
-    =
+let match_next_token (t : Lexer.token list) (expected : Lexer.token) : bool =
   (* returns true if expected matches first token in list, false otherwise *)
   match t with
   | [] -> false
@@ -147,7 +146,7 @@ let format_asst (a : asst option) : string =
       name_str ^ " = " ^ format_expr x.expr
   | None -> "Not found"
 
-let rec match_varname (tokens : Lexer.token list) :
+let match_varname (tokens : Lexer.token list) :
     varName option * Lexer.token list =
   (* varName -> IDENT *)
   match tokens with
@@ -158,8 +157,7 @@ let rec match_varname (tokens : Lexer.token list) :
       | IDENTIFIER name -> (Some (IDENT name), rem_tokens)
       | _ -> (None, tokens))
 
-let rec match_asst (tokens : Lexer.token list) : asst option * Lexer.token list
-    =
+let match_asst (tokens : Lexer.token list) : asst option * Lexer.token list =
   (* asst -> varName "=" expr ";" *)
   match tokens with
   | [] -> (None, tokens)
@@ -181,7 +179,8 @@ let rec match_asst (tokens : Lexer.token list) : asst option * Lexer.token list
           | _ -> (None, tokens))
       | _, _ -> (None, tokens))
 
-let rec match_vardecl (tokens : Lexer.token list) :
+(* VARIABLE DECLARATION *)
+let match_vardecl (tokens : Lexer.token list) :
     varDecl option * Lexer.token list =
   (* vardecl -> dtype varname ("," varname)* ";" *)
   match tokens with

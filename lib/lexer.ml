@@ -61,7 +61,7 @@ let int_of_char_list chars =
 let string_of_char_list chars = chars |> List.to_seq |> String.of_seq
 let string_to_char_list str = List.init (String.length str) (String.get str)
 
-let rec format_token (t : token) : string =
+let format_token (t : token) : string =
   match t with
   (* data *)
   | NUMBER n -> "NUMBER " ^ string_of_int n
@@ -113,7 +113,7 @@ let rec print_list (format_element : 'a -> string) (l : 'a list) : unit =
       print_endline (format_element x);
       print_list format_element xs
 
-let rec merge_partial_token (acc : accum) : token option =
+let merge_partial_token (acc : accum) : token option =
   (* tries to combines partial tokens into a complete token *)
   match acc with
   | Empty -> None
@@ -236,7 +236,7 @@ let rec tokenize_helper (accum : token list) (prog : string list) : token list =
               tokenize_helper (t :: accum) (string_of_char_list r :: rest)))
 
 (* --main functions-- *)
-let rec tokenize (prog : string) : token list * token list =
+let tokenize (prog : string) : token list * token list =
   (* tokenizes input, records errors and returns both results *)
   let tokens =
     String.split_on_char ' ' prog (* split program based on whitespace *)
