@@ -169,58 +169,43 @@ let match_asst (tokens : Lexer.token list) : asst option * Lexer.token list =
   | token :: rem_tokens -> (
       (* try to match varname *)
       match match_ident (token :: rem_tokens) with
-      | Some name, t1 :: r1 -> (
-          match t1 with
-          (* try to match "=" *)
-          | ASSIGNMENT -> (
-              (* try to match expr *)
-              match match_expr r1 with
-              | e :: es, t2 :: r2 -> (
-                  match t2 with
-                  (* try to match ";" *)
-                  | SEMICOLON -> (Some { name; expr = e }, r2)
-                  | _ -> (None, tokens))
-              | _, _ -> (None, tokens))
-          | _ -> (None, tokens))
-      | _, _ -> (None, tokens))
+      | Some name, ASSIGNMENT :: rem -> (
+          (* try to match expr *)
+          match match_expr rem with
+          | e :: es, SEMICOLON :: r -> (Some { name; expr = e }, r)
+          | _, _ -> (None, tokens))
+      | _ -> (None, tokens))
 
 (* VARIABLE DECLARATION *)
 let match_vardecl (tokens : Lexer.token list) :
     varDecl option * Lexer.token list =
   (* vardecl -> dtype varname ("," varname)* ";" *)
   match tokens with
-  | [] -> (None, tokens)
-  | token :: rem_tokens -> (
-      match token with
-      (* try to match dtype *)
-      | DATATYPE dtype -> (
-          (* try to match varname *)
-          match match_ident rem_tokens with
-          | Some vname, rtok :: rem ->
-              (* check for semicolon *)
-              if match_next_token (rtok :: rem) Lexer.SEMICOLON then
-                (Some { dtype; vars = [ vname ] }, rem)
-              else
-                (* look for more varname declarations *)
-                let rec loop (t : Lexer.token list) (accum : ident list) :
-                    varDecl option * Lexer.token list =
-                  match (t, accum) with
-                  | tok :: ts, a :: acs -> (
-                      match tok with
-                      (* declaration should end with a ";" *)
-                      | SEMICOLON ->
-                          (Some { dtype; vars = List.rev (a :: acs) }, ts)
-                      | COMMA -> (
-                          (* try to match varname *)
-                          match match_ident ts with
-                          | Some v, r -> loop r (v :: accum)
-                          | _, _ -> (None, token :: rem_tokens))
-                      | _ -> (None, token :: rem_tokens))
-                  | _, _ -> (None, token :: rem_tokens)
-                in
-                loop (rtok :: rem) [ vname ]
-          | _ -> (None, token :: rem_tokens))
-      | _ -> (None, token :: rem_tokens))
+  (* try to match dtype *)
+  | DATATYPE dtype :: rem_tokens -> (
+      (* try to match varname *)
+      match match_ident rem_tokens with
+      | Some vname, rtok :: rem ->
+          (* check for semicolon *)
+          if match_next_token (rtok :: rem) Lexer.SEMICOLON then
+            (Some { dtype; vars = [ vname ] }, rem)
+          else
+            (* look for more varname declarations *)
+            let rec loop (t : Lexer.token list) (accum : ident list) :
+                varDecl option * Lexer.token list =
+              match (t, accum) with
+              | SEMICOLON :: ts, a :: acs ->
+                  (Some { dtype; vars = List.rev (a :: acs) }, ts)
+              | COMMA :: ts, a :: acs -> (
+                  (* try to match varname *)
+                  match match_ident ts with
+                  | Some v, r -> loop r (v :: accum)
+                  | _, _ -> (None, tokens))
+              | _, _ -> (None, tokens)
+            in
+            loop (rtok :: rem) [ vname ]
+      | _ -> (None, tokens))
+  | _ -> (None, tokens)
 
 (* ARGUMENT LIST *)
 let match_value (tokens : Lexer.token list) : value option * Lexer.token list =
@@ -248,18 +233,15 @@ let match_arglist (tokens : Lexer.token list) :
           let rec loop (t : Lexer.token list) (accum : argList) :
               argList option * Lexer.token list =
             match t with
-            | tok :: ts -> (
-                match tok with
-                (* try to match comma *)
-                | COMMA -> (
-                    (* try to match another value *)
-                    match match_value ts with
-                    | Some newval, r -> loop r (newval :: accum)
-                    | _, _ -> (None, token :: rem_tokens))
-                | _ ->
-                    (Some (List.rev accum), tok :: ts)
+            (* try to match comma *)
+            | COMMA :: ts -> (
+                (* try to match another value *)
+                match match_value ts with
+                | Some newval, r -> loop r (newval :: accum)
+                | _, _ ->
+                    (None, token :: rem_tokens)
                     (* return arguments matched so far *))
-            | [] -> (Some (List.rev accum), t)
+            | _ -> (Some (List.rev accum), t)
           in
           loop rem [ v ]
       (* empty arglist *)
@@ -280,17 +262,11 @@ let match_funcall (tokens : Lexer.token list) :
             match_next_token (rem_tok :: rem) Lexer.L_PAREN = false
           then (None, tokens)
           else
-            (* try to argList *)
+            (* try to match ")" & ";" *)
             match match_arglist rem with
-            | Some args, t1 :: t2 :: r ->
-                (* try to match ")" *)
-                if match_next_token (t1 :: t2 :: r) Lexer.R_PAREN = true then
-                  (* try to match ";" *)
-                  if match_next_token (t2 :: r) Lexer.SEMICOLON = true then
-                    (Some { funcName = fname; args }, r)
-                  else (None, tokens)
-                else (None, tokens)
-            | _, _ -> (None, tokens))
+            | Some args, Lexer.R_PAREN :: Lexer.SEMICOLON :: r ->
+                (Some { funcName = fname; args }, r)
+            | _ -> (None, tokens))
       | _, _ -> (None, tokens))
 
 (* PARAMETER LIST *)
@@ -307,18 +283,10 @@ let match_paramList (tokens : Lexer.token list) :
           | IDENTIFIER i ->
               let rec loop (t : Lexer.token list) (accum : paramList) :
                   paramList option * Lexer.token list =
+                (* match all possible (dtype identifier) pairs *)
                 match t with
-                | t1 :: t2 :: t3 :: r -> (
-                    (* match all possible (dtype identifier) pairs *)
-                    match t1 with
-                    | COMMA -> (
-                        match t2 with
-                        | DATATYPE dt -> (
-                            match t3 with
-                            | IDENTIFIER it -> loop r ((dt, IDENT it) :: accum)
-                            | _ -> (Some (List.rev accum), tokens))
-                        | _ -> (Some (List.rev accum), tokens))
-                    | _ -> (Some (List.rev accum), tokens))
+                | COMMA :: DATATYPE dt :: IDENTIFIER it :: r ->
+                    loop r ((dt, IDENT it) :: accum)
                 | _ -> (Some (List.rev accum), tokens)
               in
               loop rem_tokens [ (d, IDENT i) ]
