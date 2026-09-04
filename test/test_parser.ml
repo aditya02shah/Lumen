@@ -28,8 +28,8 @@ let expected =
 
 let test_match_expr _ =
   match match_expr tokens with
-  | [], _ -> assert_failure "not found"
-  | e :: _, _rest -> assert_equal ~printer:format_expr expected e
+  | None, _ -> assert_failure "not found"
+  | Some e, _rest -> assert_equal ~printer:format_expr expected e
 
 let tokens2 =
   [
@@ -66,8 +66,8 @@ let expected2 =
 
 let test_match_expr2 _ =
   match match_expr tokens2 with
-  | [], _ -> assert_failure "not found"
-  | e :: _, _rest -> assert_equal ~printer:format_expr expected2 e
+  | None, _ -> assert_failure "not found"
+  | Some e, _rest -> assert_equal ~printer:format_expr expected2 e
 
 (* ASSIGNMENT *)
 let asst_tokens =
