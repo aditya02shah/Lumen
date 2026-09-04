@@ -188,6 +188,72 @@ let test_match_paramList_empty _ =
   | Some x, _ -> assert_equal [] x
   | None, _ -> assert_failure "not found paramList (empty)"
 
+(* CONDITIONAL EXPRESSIONS *)
+(* (true || true) && (false || false) *)
+let cond_tokens =
+  [
+    Lexer.L_PAREN;
+    Lexer.BOOLEAN true;
+    Lexer.LOGICAL_OR;
+    Lexer.BOOLEAN true;
+    Lexer.R_PAREN;
+    Lexer.LOGICAL_AND;
+    Lexer.L_PAREN;
+    Lexer.BOOLEAN false;
+    Lexer.LOGICAL_OR;
+    Lexer.BOOLEAN false;
+    Lexer.R_PAREN;
+  ]
+
+let test_match_condexpr1 _ =
+  match match_condexpr cond_tokens with
+  | Some x, _ ->
+      assert_equal
+        (COMBINATION
+           ( LOGICAL_AND,
+             BOOL_CMP (LOGICAL_OR, true, true),
+             BOOL_VAL (BOOL_CMP (LOGICAL_OR, false, false)) ))
+        x
+  | None, _ -> assert_failure "not found cond (1)"
+
+(* (i1 > i2) && (i3 == i4) *)
+let cond_tokens2 =
+  [
+    Lexer.L_PAREN;
+    Lexer.IDENTIFIER "i1";
+    Lexer.GREATER_THAN;
+    Lexer.IDENTIFIER "i2";
+    Lexer.R_PAREN;
+    Lexer.LOGICAL_AND;
+    Lexer.L_PAREN;
+    Lexer.IDENTIFIER "i3";
+    Lexer.EQUALS;
+    Lexer.IDENTIFIER "i4";
+    Lexer.R_PAREN;
+  ]
+
+let test_match_condexpr2 _ =
+  match match_condexpr cond_tokens2 with
+  | Some x, _ ->
+      assert_equal
+        (COMBINATION
+           ( LOGICAL_AND,
+             VAL_CMP
+               (GREATER_THAN, IDENTIFIER (IDENT "i1"), IDENTIFIER (IDENT "i2")),
+             BOOL_VAL
+               (VAL_CMP
+                  (EQUALS, IDENTIFIER (IDENT "i3"), IDENTIFIER (IDENT "i4"))) ))
+        x
+  | None, _ -> assert_failure "not found cond (2)"
+
+(* !false *)
+let cond_tokens3 = [ Lexer.NOT; Lexer.BOOLEAN false ]
+
+let test_match_condexpr3 _ =
+  match match_condexpr cond_tokens3 with
+  | Some x, _ -> assert_equal (BOOL_VAL (NOT false)) x
+  | None, _ -> assert_failure "not found cond (3)"
+
 let suite =
   "parser tests"
   >::: [
@@ -202,6 +268,9 @@ let suite =
          "match_funcall with args" >:: test_match_funcall_args;
          "match_paramList" >:: test_match_paramList;
          "match_paramList empty" >:: test_match_paramList_empty;
+         "match_condexpr 1 (bool combo)" >:: test_match_condexpr1;
+         "match_condexpr 2 (comparisons)" >:: test_match_condexpr2;
+         "match_condexpr 3 (not)" >:: test_match_condexpr3;
        ]
 
 let () = run_test_tt_main suite
