@@ -1,5 +1,12 @@
-(* expression *)
+exception Invalid_expr
 
+(* TYPES *)
+
+(* basic values *)
+type ident = IDENT of string
+type value = IDENTIFIER of ident | NUMBER of int | BOOLEAN of bool
+
+(* expression *)
 type arithmetic_op = ADD | MULTIPLY | SUBTRACT | DIVIDE | MOD | POW
 
 type expr =
@@ -7,9 +14,36 @@ type expr =
   | STRING of string
   | INCREMENT of expr
   | BINARY of arithmetic_op * expr * expr
-(* TODO: logical ops *)
 
-exception Invalid_expr
+(* conditional expression *)
+type logical_compare =
+  | LESS_THAN
+  | LESS_THAN_EQUALS
+  | GREATER_THAN
+  | GREATER_THAN_EQUALS
+  | EQUALS
+  | NOT_EQUALS
+
+type logical_combination = LOGICAL_AND | LOGICAL_OR
+
+type bool_value =
+  | BOOL of bool
+  | NOT of bool
+  | VAL_CMP of logical_compare * value * value
+  | BOOL_CMP of logical_combination * bool * bool
+
+type cond_expr =
+  | BOOL_VAL of bool_value
+  | COMBINATION of logical_combination * bool_value * cond_expr
+
+(* variables *)
+type varDecl = { dtype : Lexer.dtype; vars : ident list }
+type asst = { name : ident; expr : expr }
+
+(* functions *)
+type argList = value list
+type paramList = (Lexer.dtype * ident) list
+type funcCall = { funcName : ident; args : argList }
 
 let rec format_expr expr =
   match expr with
@@ -25,12 +59,6 @@ let rec format_expr expr =
         | DIVIDE -> "DIVIDE"
         | MOD -> "MOD"
         | POW -> "POW"
-        (* | LESS_THAN -> "LESS_THAN"
-        | LESS_THAN_EQUALS -> "LESS_THAN_EQUALS"
-        | GREATER_THAN -> "GREATER_THAN"
-        | GREATER_THAN_EQUALS -> "GREATER_THAN_EQUALS"
-        | LOGICAL_AND -> "LOGICAL_AND"
-        | LOGICAL_OR -> "LOGICAL_OR" *)
       in
       Printf.sprintf "BINARY(%s, %s, %s)" op_str (format_expr e1)
         (format_expr e2)
@@ -134,15 +162,6 @@ and match_factor (tokens : Lexer.token list) : expr list * Lexer.token list =
               else ([], token :: rem_tokens)
           | _, _ -> ([], token :: rem_tokens))
       | _ -> ([], token :: rem_tokens))
-
-(* TYPES *)
-type ident = IDENT of string
-type value = IDENTIFIER of ident | NUMBER of int | BOOLEAN of bool
-type asst = { name : ident; expr : expr }
-type varDecl = { dtype : Lexer.dtype; vars : ident list }
-type argList = value list
-type paramList = (Lexer.dtype * ident) list
-type funcCall = { funcName : ident; args : argList }
 
 (* ASSIGNMENT *)
 let format_asst (a : asst option) : string =
@@ -293,3 +312,93 @@ let match_paramList (tokens : Lexer.token list) :
           | _ -> (Some [], tokens))
       | _ -> (Some [], tokens))
   | _ -> (Some [], tokens)
+
+(* CONDITIONAL EXPRESSION *)
+let match_valcmp (tokens : Lexer.token list) :
+    bool_value option * Lexer.token list =
+  (* valcmp = "(" val logical_compare val ")"*)
+  match tokens with
+  (* try to match "(" *)
+  | L_PAREN :: rem_tokens -> (
+      (* try to match val (operand1) *)
+      match match_value rem_tokens with
+      | Some op1, tok :: rem -> (
+          (* try to match logical_compare operator *)
+          let res =
+            match tok with
+            | LESS_THAN -> Some LESS_THAN
+            | LESS_THAN_EQUALS -> Some LESS_THAN_EQUALS
+            | GREATER_THAN -> Some GREATER_THAN
+            | GREATER_THAN_EQUALS -> Some GREATER_THAN_EQUALS
+            | EQUALS -> Some EQUALS
+            | NOT_EQUALS -> Some NOT_EQUALS
+            | _ -> None
+          in
+          match res with
+          | Some op -> (
+              (* try to match val (operand2) *)
+              match match_value rem with
+              | Some op2, R_PAREN :: r -> (Some (VAL_CMP (op, op1, op2)), r)
+              | _ -> (None, tokens))
+          | None -> (None, tokens))
+      | _ -> (None, tokens))
+  | _ -> (None, tokens)
+
+let match_boolcmp (tokens : Lexer.token list) :
+    bool_value option * Lexer.token list =
+  (* boolcmp = "(" bool logical_combination bool ")"*)
+  match tokens with
+  | L_PAREN :: BOOLEAN op1 :: LOGICAL_AND :: BOOLEAN op2 :: R_PAREN :: r ->
+      (Some (BOOL_CMP (LOGICAL_AND, op1, op2)), r)
+  | L_PAREN :: BOOLEAN op1 :: LOGICAL_OR :: BOOLEAN op2 :: R_PAREN :: r ->
+      (Some (BOOL_CMP (LOGICAL_OR, op1, op2)), r)
+  | _ -> (None, tokens)
+
+let match_boolval (tokens : Lexer.token list) :
+    bool_value option * Lexer.token list =
+  (* 
+  boolval = bool
+          = not bool
+          = boolcmp
+          = valcmp
+  *)
+  match tokens with
+  | [] -> (None, tokens)
+  | BOOLEAN b :: rem_tokens ->
+      (Some (BOOL b), rem_tokens) (* try to match bool *)
+  | NOT :: BOOLEAN b :: rem_tokens ->
+      (Some (NOT b), rem_tokens) (* try to match "not" bool *)
+  | token :: rem_tokens -> (
+      (* try to match valcmp *)
+      match match_valcmp tokens with
+      | Some v, rem -> (Some v, rem)
+      | _ -> (
+          (* try to match boolcmp *)
+          match match_boolcmp tokens with
+          | Some bv, r -> (Some bv, r)
+          | _ -> (None, tokens)))
+
+let rec match_condexpr (tokens : Lexer.token list) :
+    cond_expr option * Lexer.token list =
+  match tokens with
+  (* 
+  condexpr = boolval
+           = boolval (logical_combination condexpr)
+  *)
+  | token :: rem_tokens -> (
+      (* try to match boolval *)
+      match match_boolval tokens with
+      | Some v, [] -> (Some (BOOL_VAL v), [])
+      (* try to match boolval (logical_combination condexpr) *)
+      | Some v, LOGICAL_AND :: r -> (
+          (* try to match condexpr *)
+          match match_condexpr r with
+          | Some c, rem -> (Some (COMBINATION (LOGICAL_AND, v, c)), rem)
+          | _ -> (Some (BOOL_VAL v), LOGICAL_AND :: r))
+      | Some v, LOGICAL_OR :: r -> (
+          (* try to match condexpr *)
+          match match_condexpr r with
+          | Some c, rem -> (Some (COMBINATION (LOGICAL_OR, v, c)), rem)
+          | _ -> (Some (BOOL_VAL v), LOGICAL_OR :: r))
+      | _ -> (None, tokens))
+  | _ -> (None, tokens)

@@ -33,6 +33,7 @@ type token =
   | DIVIDE
   | MOD
   | POW
+  | INCREMENT
   | EQUALS
   | NOT_EQUALS
   | LESS_THAN
@@ -41,7 +42,7 @@ type token =
   | GREATER_THAN
   | LOGICAL_AND
   | LOGICAL_OR
-  | INCREMENT
+  | NOT
   | UNKNOWN of string (* unrecognized tokens *)
 
 type partial_token =
@@ -96,6 +97,7 @@ let format_token (t : token) : string =
   | DIVIDE -> "'/'"
   | MOD -> "'%'"
   | POW -> "'^'"
+  | INCREMENT -> "'INCREMENT'"
   | EQUALS -> "'=='"
   | NOT_EQUALS -> "!="
   | LESS_THAN -> "'<'"
@@ -104,7 +106,7 @@ let format_token (t : token) : string =
   | GREATER_THAN -> "'>'"
   | LOGICAL_AND -> "AND"
   | LOGICAL_OR -> "OR"
-  | INCREMENT -> "'INCREMENT'"
+  | NOT -> "NOT"
   | UNKNOWN x -> "<UNK ='" ^ x ^ "'>"
 
 let rec print_list (format_element : 'a -> string) (l : 'a list) : unit =
@@ -226,6 +228,7 @@ let rec tokenize_helper (accum : token list) (prog : string list) : token list =
       | ">=" -> tokenize_helper (GREATER_THAN_EQUALS :: accum) rest
       | "and" -> tokenize_helper (LOGICAL_AND :: accum) rest
       | "or" -> tokenize_helper (LOGICAL_OR :: accum) rest
+      | "not" -> tokenize_helper (NOT :: accum) rest
       | _ -> (
           (* data *)
           match get_token (string_to_char_list word) Empty with

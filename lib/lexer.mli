@@ -1,4 +1,4 @@
-type dtype = INT | BOOL
+type dtype = INT | BOOL (* supported datatypes *)
 
 type token =
   (* data *)
@@ -32,6 +32,7 @@ type token =
   | DIVIDE
   | MOD
   | POW
+  | INCREMENT
   | EQUALS
   | NOT_EQUALS
   | LESS_THAN
@@ -40,7 +41,7 @@ type token =
   | GREATER_THAN
   | LOGICAL_AND
   | LOGICAL_OR
-  | INCREMENT
+  | NOT
   | UNKNOWN of string (* unrecognized tokens *)
 
 val tokenize : string -> token list * token list
