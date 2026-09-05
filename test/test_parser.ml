@@ -254,6 +254,106 @@ let test_match_condexpr3 _ =
   | Some x, _ -> assert_equal (BOOL_VAL (NOT false)) x
   | None, _ -> assert_failure "not found cond (3)"
 
+(* STATEMENTS *)
+(* i1 = 5; *)
+let stmt_tokens =
+  [ Lexer.IDENTIFIER "i1"; Lexer.ASSIGNMENT; Lexer.NUMBER 5; Lexer.SEMICOLON ]
+
+let test_match_stmt1 _ =
+  match match_stmt stmt_tokens with
+  | [ ASST { name = IDENT "i1"; expr = INT 5 } ], [] -> ()
+  | _ -> assert_failure "unexpected stmt (1)"
+
+(* int i1, i2, i3; *)
+let stmt_tokens2 =
+  [
+    Lexer.DATATYPE INT;
+    Lexer.IDENTIFIER "i1";
+    Lexer.COMMA;
+    Lexer.IDENTIFIER "i2";
+    Lexer.COMMA;
+    Lexer.IDENTIFIER "i3";
+    Lexer.SEMICOLON;
+  ]
+
+let test_match_stmt2 _ =
+  match match_stmt stmt_tokens2 with
+  | ( [
+        VARDECL
+          { dtype = Lexer.INT; vars = [ IDENT "i1"; IDENT "i2"; IDENT "i3" ] };
+      ],
+      [] ) ->
+      ()
+  | _ -> assert_failure "unexpected stmt (2)"
+
+(* while (x < 5) { int local_var; } *)
+let stmt_tokens3 =
+  [
+    Lexer.WHILE;
+    Lexer.L_PAREN;
+    Lexer.IDENTIFIER "x";
+    Lexer.LESS_THAN;
+    Lexer.NUMBER 5;
+    Lexer.R_PAREN;
+    Lexer.L_BRACE;
+    Lexer.DATATYPE INT;
+    Lexer.IDENTIFIER "local_var";
+    Lexer.SEMICOLON;
+    Lexer.R_BRACE;
+  ]
+
+let test_match_stmt3 _ =
+  match match_stmt stmt_tokens3 with
+  | ( [
+        LOOP
+          (WHILE
+             {
+               cond;
+               body =
+                 STMTS
+                   [
+                     VARDECL { dtype = Lexer.INT; vars = [ IDENT "local_var" ] };
+                   ];
+             });
+      ],
+      [] ) ->
+      ignore cond
+  | _ -> assert_failure "unexpected stmt (3)"
+
+(* block: { int local_var; } *)
+let block_tokens =
+  [
+    Lexer.L_BRACE;
+    Lexer.DATATYPE INT;
+    Lexer.IDENTIFIER "local_var";
+    Lexer.SEMICOLON;
+    Lexer.R_BRACE;
+  ]
+
+let test_match_block _ =
+  match match_block block_tokens with
+  | ( Some
+        (STMTS [ VARDECL { dtype = Lexer.INT; vars = [ IDENT "local_var" ] } ]),
+      _ ) ->
+      ()
+  | _ -> assert_failure "unexpected block"
+
+(* x = y + 5; -- placeholder, existence-only until expr's identifier case is confirmed *)
+let stmt_tokens4 =
+  [
+    Lexer.IDENTIFIER "x";
+    Lexer.ASSIGNMENT;
+    Lexer.IDENTIFIER "y";
+    Lexer.ADD;
+    Lexer.NUMBER 5;
+    Lexer.SEMICOLON;
+  ]
+
+let test_match_stmt4 _ =
+  match match_stmt stmt_tokens4 with
+  | [ _ ], [] -> ()
+  | _ -> assert_failure "unexpected stmt (4)"
+
 let suite =
   "parser tests"
   >::: [
@@ -271,6 +371,11 @@ let suite =
          "match_condexpr 1 (bool combo)" >:: test_match_condexpr1;
          "match_condexpr 2 (comparisons)" >:: test_match_condexpr2;
          "match_condexpr 3 (not)" >:: test_match_condexpr3;
+         "match_stmt: assignment" >:: test_match_stmt1;
+         "match_stmt: vardecl (multi)" >:: test_match_stmt2;
+         "match_stmt: while loop" >:: test_match_stmt3;
+         "match_block" >:: test_match_block;
+         "match_stmt: assignment with expr" >:: test_match_stmt4;
        ]
 
 let () = run_test_tt_main suite
