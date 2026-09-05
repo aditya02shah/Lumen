@@ -95,7 +95,7 @@ let vardecl_tokens1 =
   ]
 
 let test_match_vardecl_multi _ =
-  match match_vardecl vardecl_tokens1 with
+  match match_var_decl vardecl_tokens1 with
   | Some _, _ -> ()
   | None, _ -> assert_failure "not found vardecl (multi)"
 
@@ -103,7 +103,7 @@ let vardecl_tokens2 =
   [ Lexer.DATATYPE INT; Lexer.IDENTIFIER "x"; Lexer.SEMICOLON ]
 
 let test_match_vardecl_single _ =
-  match match_vardecl vardecl_tokens2 with
+  match match_var_decl vardecl_tokens2 with
   | Some _, _ -> ()
   | None, _ -> assert_failure "not found vardecl (single)"
 
@@ -118,14 +118,14 @@ let arglist_tokens =
   ]
 
 let test_match_arglist _ =
-  match match_arglist arglist_tokens with
+  match match_arg_list arglist_tokens with
   | Some _, _ -> ()
   | None, _ -> assert_failure "not found arglist"
 
 let empty_arglist_tokens = []
 
 let test_match_arglist_empty _ =
-  match match_arglist empty_arglist_tokens with
+  match match_arg_list empty_arglist_tokens with
   | Some _, _ -> ()
   | None, _ -> assert_failure "not found arglist (empty)"
 
@@ -134,7 +134,7 @@ let funcall_tokens_empty =
   [ Lexer.IDENTIFIER "main"; Lexer.L_PAREN; Lexer.R_PAREN; Lexer.SEMICOLON ]
 
 let test_match_funcall_empty _ =
-  match match_funcall funcall_tokens_empty with
+  match match_func_call funcall_tokens_empty with
   | Some _, _ -> ()
   | None, _ -> assert_failure "not found funcall (empty args)"
 
@@ -152,7 +152,7 @@ let funcall_tokens_args =
   ]
 
 let test_match_funcall_args _ =
-  match match_funcall funcall_tokens_args with
+  match match_func_call funcall_tokens_args with
   | Some _, _ -> ()
   | None, _ -> assert_failure "not found funcall (with args)"
 
@@ -172,7 +172,7 @@ let paramList_tokens =
 let empty_paramList_tokens = []
 
 let test_match_paramList _ =
-  let x, _ = match_paramList paramList_tokens in
+  let x, _ = match_param_list paramList_tokens in
   assert_equal
     [
       (Lexer.INT, IDENT "i1"); (Lexer.INT, IDENT "i2"); (Lexer.INT, IDENT "i3");
@@ -180,7 +180,7 @@ let test_match_paramList _ =
     x
 
 let test_match_paramList_empty _ =
-  let x, _ = match_paramList empty_paramList_tokens in
+  let x, _ = match_param_list empty_paramList_tokens in
   assert_equal [] x
 
 (* CONDITIONAL EXPRESSIONS *)
@@ -201,7 +201,7 @@ let cond_tokens =
   ]
 
 let test_match_condexpr1 _ =
-  match match_condexpr cond_tokens with
+  match match_cond_expr cond_tokens with
   | Some x, _ ->
       assert_equal
         (COMBINATION
@@ -228,7 +228,7 @@ let cond_tokens2 =
   ]
 
 let test_match_condexpr2 _ =
-  match match_condexpr cond_tokens2 with
+  match match_cond_expr cond_tokens2 with
   | Some x, _ ->
       assert_equal
         (COMBINATION
@@ -245,7 +245,7 @@ let test_match_condexpr2 _ =
 let cond_tokens3 = [ Lexer.NOT; Lexer.BOOLEAN false ]
 
 let test_match_condexpr3 _ =
-  match match_condexpr cond_tokens3 with
+  match match_cond_expr cond_tokens3 with
   | Some x, _ -> assert_equal (BOOL_VAL (NOT false)) x
   | None, _ -> assert_failure "not found cond (3)"
 
@@ -372,16 +372,16 @@ let funcdecl_tokens1 =
   ]
 
 let test_match_funcdecl1 _ =
-  match match_funcDecl funcdecl_tokens1 with
+  match match_func_decl funcdecl_tokens1 with
   | ( Some
         {
-          funcName = IDENT "main";
+          func_name = IDENT "main";
           return_type = DATATYPE Lexer.INT;
           params = [ (Lexer.INT, IDENT "p1"); (Lexer.BOOL, IDENT "p2") ];
           body =
             STMTS
               [ VARDECL { dtype = Lexer.INT; vars = [ IDENT "local_var" ] } ];
-          retVal = VAL (NUMBER 5);
+          ret_val = VAL (NUMBER 5);
         },
       _ ) ->
       ()
@@ -404,16 +404,16 @@ let funcdecl_tokens2 =
   ]
 
 let test_match_funcdecl2 _ =
-  match match_funcDecl funcdecl_tokens2 with
+  match match_func_decl funcdecl_tokens2 with
   | ( Some
         {
-          funcName = IDENT "main";
+          func_name = IDENT "main";
           return_type = DATATYPE Lexer.INT;
           params = [];
           body =
             STMTS
               [ VARDECL { dtype = Lexer.INT; vars = [ IDENT "local_var" ] } ];
-          retVal = VAL (NUMBER 5);
+          ret_val = VAL (NUMBER 5);
         },
       _ ) ->
       ()

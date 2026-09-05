@@ -13,6 +13,7 @@ type token =
   | MUT
   (* syntax *)
   | DATATYPE of dtype
+  | VOID
   | OPTION
   | SOME
   | NONE
@@ -77,6 +78,7 @@ let format_token (t : token) : string =
   (* syntax *)
   | DATATYPE d -> (
       match d with INT -> "DATATYPE: INT" | BOOL -> "DATATYPE: BOOL")
+  | VOID -> "VOID"
   | OPTION -> "'OPTION'"
   | SOME -> "'SOME'"
   | NONE -> "'NONE'"

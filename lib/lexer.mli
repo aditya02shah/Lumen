@@ -12,6 +12,7 @@ type token =
   | MUT
   (* syntax *)
   | DATATYPE of dtype
+  | VOID
   | OPTION
   | SOME
   | NONE

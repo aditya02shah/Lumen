@@ -38,47 +38,47 @@ type cond_expr =
   | COMBINATION of logical_combination * bool_value * cond_expr
 
 (* variables *)
-type varDecl = { dtype : Lexer.dtype; vars : ident list }
+type var_decl = { dtype : Lexer.dtype; vars : ident list }
 type asst = { name : ident; expr : expr }
 
 (* statement *)
 type stmt =
-  | VARDECL of varDecl
+  | VARDECL of var_decl
   | ASST of asst
   | LOOP of loop
   | EXP of expr
   | EMPTY
 
 and block = STMTS of stmt list
-and whileLoop = { cond : cond_expr; body : block }
-and loop = WHILE of whileLoop
+and while_loop = { cond : cond_expr; body : block }
+and loop = WHILE of while_loop
 
 (* functions *)
-type retType = DATATYPE of Lexer.dtype | VOID
-type retVal = VAL of value | NONE
-type argList = value list
-type paramList = (Lexer.dtype * ident) list
+type ret_type = DATATYPE of Lexer.dtype | VOID
+type ret_val = VAL of value | NONE
+type param_list = (Lexer.dtype * ident) list
 
-type funcDecl = {
-  funcName : ident;
-  return_type : retType;
-  params : paramList;
+type func_decl = {
+  func_name : ident;
+  return_type : ret_type;
+  params : param_list;
   body : block;
-  retVal : retVal;
+  ret_val : ret_val;
 }
 
-type funcCall = { funcName : ident; args : argList }
+type arg_list = value list
+type func_call = { func_name : ident; args : arg_list }
 
 val match_expr : Lexer.token list -> expr option * Lexer.token list
 val format_expr : expr -> string
-val match_condexpr : Lexer.token list -> cond_expr option * Lexer.token list
-val match_vardecl : Lexer.token list -> varDecl option * Lexer.token list
+val match_cond_expr : Lexer.token list -> cond_expr option * Lexer.token list
+val match_var_decl : Lexer.token list -> var_decl option * Lexer.token list
 val match_asst : Lexer.token list -> asst option * Lexer.token list
 val format_asst : asst option -> string
-val match_arglist : Lexer.token list -> argList option * Lexer.token list
-val match_paramList : Lexer.token list -> paramList * Lexer.token list
-val match_funcall : Lexer.token list -> funcCall option * Lexer.token list
+val match_arg_list : Lexer.token list -> arg_list option * Lexer.token list
+val match_param_list : Lexer.token list -> param_list * Lexer.token list
+val match_func_call : Lexer.token list -> func_call option * Lexer.token list
 val match_loop : Lexer.token list -> loop option * Lexer.token list
 val match_block : Lexer.token list -> block option * Lexer.token list
 val match_stmt : Lexer.token list -> stmt list * Lexer.token list
-val match_funcDecl : Lexer.token list -> funcDecl option * Lexer.token list
+val match_func_decl : Lexer.token list -> func_decl option * Lexer.token list
