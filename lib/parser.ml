@@ -12,6 +12,7 @@ type arithmetic_op = ADD | MULTIPLY | SUBTRACT | DIVIDE | MOD | POW
 type expr =
   | INT of int
   | STRING of string
+  | VAR of ident
   | INCREMENT of expr
   | BINARY of arithmetic_op * expr * expr
 
@@ -50,6 +51,7 @@ let rec format_expr expr =
   | INT n -> Printf.sprintf "INT(%d)" n
   | STRING s -> Printf.sprintf "STRING(%S)" s
   | INCREMENT e -> Printf.sprintf "INCREMENT(%s)" (format_expr e)
+  | VAR (IDENT i) -> Printf.sprintf "IDENT(%s)" i
   | BINARY (op, e1, e2) ->
       let op_str =
         match op with
@@ -128,11 +130,13 @@ and match_term (tokens : Lexer.token list) : expr option * Lexer.token list =
 
 and match_factor (tokens : Lexer.token list) : expr option * Lexer.token list =
   (* returns a factor along with the remaining tokens *)
-  (* factor -> Number | "(" expr ")" *)
+  (* factor -> Identifier | Number | "(" expr ")" *)
   match tokens with
   | [] -> (None, tokens)
   | token :: rem_tokens -> (
       match token with
+      (* try to match an identifier *)
+      | IDENTIFIER i -> (Some (VAR (IDENT i)), rem_tokens)
       (* try to match a number *)
       | NUMBER i -> (Some (INT i), rem_tokens)
       (* try to match ( *)
@@ -164,16 +168,11 @@ let match_ident (tokens : Lexer.token list) : ident option * Lexer.token list =
 let match_asst (tokens : Lexer.token list) : asst option * Lexer.token list =
   (* asst -> varName "=" expr ";" *)
   match tokens with
-  | [] -> (None, tokens)
-  | token :: rem_tokens -> (
-      (* try to match varname *)
-      match match_ident (token :: rem_tokens) with
-      | Some name, ASSIGNMENT :: rem -> (
-          (* try to match expr *)
-          match match_expr rem with
-          | Some e, SEMICOLON :: r -> (Some { name; expr = e }, r)
-          | _, _ -> (None, tokens))
-      | _ -> (None, tokens))
+  | IDENTIFIER name :: ASSIGNMENT :: rem -> (
+      match match_expr rem with
+      | Some e, SEMICOLON :: r -> (Some { name = IDENT name; expr = e }, r)
+      | _, _ -> (None, tokens))
+  | _ -> (None, tokens)
 
 (* VARIABLE DECLARATION *)
 let match_vardecl (tokens : Lexer.token list) :
