@@ -172,21 +172,16 @@ let paramList_tokens =
 let empty_paramList_tokens = []
 
 let test_match_paramList _ =
-  match match_paramList paramList_tokens with
-  | Some x, _ ->
-      assert_equal
-        [
-          (Lexer.INT, IDENT "i1");
-          (Lexer.INT, IDENT "i2");
-          (Lexer.INT, IDENT "i3");
-        ]
-        x
-  | None, _ -> assert_failure "not found paramList"
+  let x, _ = match_paramList paramList_tokens in
+  assert_equal
+    [
+      (Lexer.INT, IDENT "i1"); (Lexer.INT, IDENT "i2"); (Lexer.INT, IDENT "i3");
+    ]
+    x
 
 let test_match_paramList_empty _ =
-  match match_paramList empty_paramList_tokens with
-  | Some x, _ -> assert_equal [] x
-  | None, _ -> assert_failure "not found paramList (empty)"
+  let x, _ = match_paramList empty_paramList_tokens in
+  assert_equal [] x
 
 (* CONDITIONAL EXPRESSIONS *)
 (* (true || true) && (false || false) *)
@@ -354,6 +349,76 @@ let test_match_stmt4 _ =
   | [ _ ], [] -> ()
   | _ -> assert_failure "unexpected stmt (4)"
 
+(* FUNCTION DECLARATION *)
+let funcdecl_tokens1 =
+  [
+    Lexer.DATATYPE INT;
+    Lexer.IDENTIFIER "main";
+    Lexer.L_PAREN;
+    Lexer.DATATYPE INT;
+    Lexer.IDENTIFIER "p1";
+    Lexer.COMMA;
+    Lexer.DATATYPE BOOL;
+    Lexer.IDENTIFIER "p2";
+    Lexer.R_PAREN;
+    Lexer.L_BRACE;
+    Lexer.DATATYPE INT;
+    Lexer.IDENTIFIER "local_var";
+    Lexer.SEMICOLON;
+    Lexer.R_BRACE;
+    Lexer.RETURN;
+    Lexer.NUMBER 5;
+    Lexer.SEMICOLON;
+  ]
+
+let test_match_funcdecl1 _ =
+  match match_funcDecl funcdecl_tokens1 with
+  | ( Some
+        {
+          funcName = IDENT "main";
+          return_type = DATATYPE Lexer.INT;
+          params = [ (Lexer.INT, IDENT "p1"); (Lexer.BOOL, IDENT "p2") ];
+          body =
+            STMTS
+              [ VARDECL { dtype = Lexer.INT; vars = [ IDENT "local_var" ] } ];
+          retVal = VAL (NUMBER 5);
+        },
+      _ ) ->
+      ()
+  | _ -> assert_failure "unexpected funcdecl (with params)"
+
+let funcdecl_tokens2 =
+  [
+    Lexer.DATATYPE INT;
+    Lexer.IDENTIFIER "main";
+    Lexer.L_PAREN;
+    Lexer.R_PAREN;
+    Lexer.L_BRACE;
+    Lexer.DATATYPE INT;
+    Lexer.IDENTIFIER "local_var";
+    Lexer.SEMICOLON;
+    Lexer.R_BRACE;
+    Lexer.RETURN;
+    Lexer.NUMBER 5;
+    Lexer.SEMICOLON;
+  ]
+
+let test_match_funcdecl2 _ =
+  match match_funcDecl funcdecl_tokens2 with
+  | ( Some
+        {
+          funcName = IDENT "main";
+          return_type = DATATYPE Lexer.INT;
+          params = [];
+          body =
+            STMTS
+              [ VARDECL { dtype = Lexer.INT; vars = [ IDENT "local_var" ] } ];
+          retVal = VAL (NUMBER 5);
+        },
+      _ ) ->
+      ()
+  | _ -> assert_failure "unexpected funcdecl (no params)"
+
 let suite =
   "parser tests"
   >::: [
@@ -376,6 +441,8 @@ let suite =
          "match_stmt: while loop" >:: test_match_stmt3;
          "match_block" >:: test_match_block;
          "match_stmt: assignment with expr" >:: test_match_stmt4;
+         "match_funcDecl with params" >:: test_match_funcdecl1;
+         "match_funcDecl no params" >:: test_match_funcdecl2;
        ]
 
 let () = run_test_tt_main suite
