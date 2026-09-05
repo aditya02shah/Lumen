@@ -41,11 +41,6 @@ type cond_expr =
 type varDecl = { dtype : Lexer.dtype; vars : ident list }
 type asst = { name : ident; expr : expr }
 
-(* functions *)
-type argList = value list
-type paramList = (Lexer.dtype * ident) list
-type funcCall = { funcName : ident; args : argList }
-
 (* statement *)
 type stmt =
   | VARDECL of varDecl
@@ -57,6 +52,22 @@ type stmt =
 and block = STMTS of stmt list
 and whileLoop = { cond : cond_expr; body : block }
 and loop = WHILE of whileLoop
+
+(* functions *)
+type retType = DATATYPE of Lexer.dtype | VOID
+type retVal = VAL of value | NONE
+type argList = value list
+type paramList = (Lexer.dtype * ident) list
+
+type funcDecl = {
+  funcName : ident;
+  return_type : retType;
+  params : paramList;
+  body : block;
+  retVal : retVal;
+}
+
+type funcCall = { funcName : ident; args : argList }
 
 let rec format_expr expr =
   match expr with
@@ -280,8 +291,7 @@ let match_funcall (tokens : Lexer.token list) :
       | _, _ -> (None, tokens))
 
 (* PARAMETER LIST *)
-let match_paramList (tokens : Lexer.token list) :
-    paramList option * Lexer.token list =
+let match_paramList (tokens : Lexer.token list) : paramList * Lexer.token list =
   (* paramList -> [] | dtype Identifier ("," dtype Identifier)* *)
   match tokens with
   | token :: t :: rem_tokens -> (
@@ -292,17 +302,17 @@ let match_paramList (tokens : Lexer.token list) :
           match t with
           | IDENTIFIER i ->
               let rec loop (t : Lexer.token list) (accum : paramList) :
-                  paramList option * Lexer.token list =
+                  paramList * Lexer.token list =
                 (* match all possible (dtype identifier) pairs *)
                 match t with
                 | COMMA :: DATATYPE dt :: IDENTIFIER it :: r ->
                     loop r ((dt, IDENT it) :: accum)
-                | _ -> (Some (List.rev accum), tokens)
+                | _ -> (List.rev accum, t)
               in
               loop rem_tokens [ (d, IDENT i) ]
-          | _ -> (Some [], tokens))
-      | _ -> (Some [], tokens))
-  | _ -> (Some [], tokens)
+          | _ -> ([], tokens))
+      | _ -> ([], tokens))
+  | _ -> ([], tokens)
 
 (* CONDITIONAL EXPRESSION *)
 let match_valcmp (tokens : Lexer.token list) :
@@ -460,3 +470,54 @@ and match_stmt_helper (tokens : Lexer.token list) :
               match match_expr tokens with
               | Some e, SEMICOLON :: rem_tok -> (Some (EXP e), rem_tok)
               | _ -> (None, tokens))))
+
+(* FUNCTION DECLARATION *)
+let match_funcDecl_helper (ret : retType) (fname : string)
+    (tokens : Lexer.token list) : funcDecl option * Lexer.token list =
+  (* matches  "(" paramList ")" block  
+            | "(" paramList ")" block return value ";"
+    *)
+  match match_paramList tokens with
+  (* get paramList *)
+  | params, R_PAREN :: rem_tokens -> (
+      (* try to match block *)
+      match match_block rem_tokens with
+      | Some b, RETURN :: r_tok -> (
+          (* try to match retval *)
+          match match_value r_tok with
+          | Some v, SEMICOLON :: toks ->
+              ( Some
+                  {
+                    funcName = IDENT fname;
+                    return_type = ret;
+                    params;
+                    body = b;
+                    retVal = VAL v;
+                  },
+                toks )
+          | _ -> (None, tokens))
+      | Some b, r ->
+          (* void function *)
+          ( Some
+              {
+                funcName = IDENT fname;
+                return_type = ret;
+                params;
+                body = b;
+                retVal = NONE;
+              },
+            r )
+      | _ -> (None, tokens))
+  | _ -> (None, tokens)
+
+let match_funcDecl (tokens : Lexer.token list) :
+    funcDecl option * Lexer.token list =
+  (* funcDecl = retType funcName "(" paramList ")" block  
+              = retType funcName "(" paramList ")" block return value ";"
+    *)
+  match tokens with
+  | Lexer.DATATYPE d :: IDENTIFIER fname :: L_PAREN :: rem ->
+      match_funcDecl_helper (DATATYPE d) fname rem
+  | VOID :: IDENTIFIER fname :: L_PAREN :: rem ->
+      match_funcDecl_helper VOID fname rem
+  | _ -> (None, tokens)

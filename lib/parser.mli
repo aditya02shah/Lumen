@@ -41,11 +41,6 @@ type cond_expr =
 type varDecl = { dtype : Lexer.dtype; vars : ident list }
 type asst = { name : ident; expr : expr }
 
-(* functions *)
-type argList = value list
-type paramList = (Lexer.dtype * ident) list
-type funcCall = { funcName : ident; args : argList }
-
 (* statement *)
 type stmt =
   | VARDECL of varDecl
@@ -58,6 +53,22 @@ and block = STMTS of stmt list
 and whileLoop = { cond : cond_expr; body : block }
 and loop = WHILE of whileLoop
 
+(* functions *)
+type retType = DATATYPE of Lexer.dtype | VOID
+type retVal = VAL of value | NONE
+type argList = value list
+type paramList = (Lexer.dtype * ident) list
+
+type funcDecl = {
+  funcName : ident;
+  return_type : retType;
+  params : paramList;
+  body : block;
+  retVal : retVal;
+}
+
+type funcCall = { funcName : ident; args : argList }
+
 val match_expr : Lexer.token list -> expr option * Lexer.token list
 val format_expr : expr -> string
 val match_condexpr : Lexer.token list -> cond_expr option * Lexer.token list
@@ -65,8 +76,9 @@ val match_vardecl : Lexer.token list -> varDecl option * Lexer.token list
 val match_asst : Lexer.token list -> asst option * Lexer.token list
 val format_asst : asst option -> string
 val match_arglist : Lexer.token list -> argList option * Lexer.token list
-val match_paramList : Lexer.token list -> paramList option * Lexer.token list
+val match_paramList : Lexer.token list -> paramList * Lexer.token list
 val match_funcall : Lexer.token list -> funcCall option * Lexer.token list
 val match_loop : Lexer.token list -> loop option * Lexer.token list
 val match_block : Lexer.token list -> block option * Lexer.token list
 val match_stmt : Lexer.token list -> stmt list * Lexer.token list
+val match_funcDecl : Lexer.token list -> funcDecl option * Lexer.token list
