@@ -46,6 +46,18 @@ type argList = value list
 type paramList = (Lexer.dtype * ident) list
 type funcCall = { funcName : ident; args : argList }
 
+(* statement *)
+type stmt =
+  | VARDECL of varDecl
+  | ASST of asst
+  | LOOP of loop
+  | EXP of expr
+  | EMPTY
+
+and block = STMTS of stmt list
+and whileLoop = { cond : cond_expr; body : block }
+and loop = WHILE of whileLoop
+
 let rec format_expr expr =
   match expr with
   | INT n -> Printf.sprintf "INT(%d)" n
@@ -359,15 +371,15 @@ let match_boolval (tokens : Lexer.token list) :
 
 let rec match_condexpr (tokens : Lexer.token list) :
     cond_expr option * Lexer.token list =
-  match tokens with
   (* 
   condexpr = boolval
            = boolval (logical_combination condexpr)
   *)
+  match tokens with
   | token :: rem_tokens -> (
       (* try to match boolval *)
       match match_boolval tokens with
-      | Some v, [] -> (Some (BOOL_VAL v), [])
+      (* | Some v, [] -> (Some (BOOL_VAL v), []) *)
       (* try to match boolval (logical_combination condexpr) *)
       | Some v, LOGICAL_AND :: r -> (
           (* try to match condexpr *)
@@ -379,5 +391,72 @@ let rec match_condexpr (tokens : Lexer.token list) :
           match match_condexpr r with
           | Some c, rem -> (Some (COMBINATION (LOGICAL_OR, v, c)), rem)
           | _ -> (Some (BOOL_VAL v), LOGICAL_OR :: r))
+      | Some v, r -> (Some (BOOL_VAL v), r)
       | _ -> (None, tokens))
   | _ -> (None, tokens)
+
+(* STATEMENT *)
+let rec match_loop (tokens : Lexer.token list) : loop option * Lexer.token list
+    =
+  (* loop = while cond block *)
+  match tokens with
+  (* try to match while *)
+  | WHILE :: rem_tokens -> (
+      (* try to match cond *)
+      match match_condexpr rem_tokens with
+      | Some exp, rem -> (
+          (* try to match block *)
+          match match_block rem with
+          | Some b, r ->
+              let loop = { cond = exp; body = b } in
+              (Some (WHILE loop), r)
+          | _ -> (None, tokens))
+      | _ -> (None, tokens))
+  | _ -> (None, tokens)
+
+and match_block (tokens : Lexer.token list) : block option * Lexer.token list =
+  (* block = "{" stmt "}" *)
+  match tokens with
+  (* try to match "{" *)
+  | L_BRACE :: rem_tokens -> (
+      (* try to stmt *)
+      match match_stmt rem_tokens with
+      (* try to match "}" *)
+      | s :: st, R_BRACE :: rem -> (Some (STMTS (s :: st)), rem)
+      | _ -> (None, tokens))
+  | _ -> (None, tokens)
+
+and match_stmt (tokens : Lexer.token list) : stmt list * Lexer.token list =
+  (* stmt =  (vardecl | asst | loop | (expr ";"))* *)
+  let rec loop (t : Lexer.token list) (accum : stmt list) :
+      stmt list * Lexer.token list =
+    (* match all valid stmts *)
+    match match_stmt_helper t with
+    | Some st, r -> loop r (st :: accum)
+    | None, r -> (
+        match accum with
+        | [] -> ([ EMPTY ], tokens)
+        | a :: acs -> (List.rev (a :: acs), r))
+  in
+  loop tokens []
+
+and match_stmt_helper (tokens : Lexer.token list) :
+    stmt option * Lexer.token list =
+  (* match a single statement (stmt =  (vardecl | asst | loop | (expr ";")) *)
+
+  (* try to match vardecl *)
+  match match_vardecl tokens with
+  | Some vd, rem_tokens -> (Some (VARDECL vd), rem_tokens)
+  | _ -> (
+      (* try to match asst *)
+      match match_asst tokens with
+      | Some at, rem -> (Some (ASST at), rem)
+      | _ -> (
+          (* try to match loop *)
+          match match_loop tokens with
+          | Some lp, r -> (Some (LOOP lp), r)
+          | _ -> (
+              (* try to match expr *)
+              match match_expr tokens with
+              | Some e, SEMICOLON :: rem_tok -> (Some (EXP e), rem_tok)
+              | _ -> (None, tokens))))

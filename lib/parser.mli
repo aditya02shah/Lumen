@@ -12,6 +12,7 @@ type arithmetic_op = ADD | MULTIPLY | SUBTRACT | DIVIDE | MOD | POW
 type expr =
   | INT of int
   | STRING of string
+  | VAR of ident
   | INCREMENT of expr
   | BINARY of arithmetic_op * expr * expr
 
@@ -45,7 +46,19 @@ type argList = value list
 type paramList = (Lexer.dtype * ident) list
 type funcCall = { funcName : ident; args : argList }
 
-val match_expr : Lexer.token list -> expr list * Lexer.token list
+(* statement *)
+type stmt =
+  | VARDECL of varDecl
+  | ASST of asst
+  | LOOP of loop
+  | EXP of expr
+  | EMPTY
+
+and block = STMTS of stmt list
+and whileLoop = { cond : cond_expr; body : block }
+and loop = WHILE of whileLoop
+
+val match_expr : Lexer.token list -> expr option * Lexer.token list
 val format_expr : expr -> string
 val match_condexpr : Lexer.token list -> cond_expr option * Lexer.token list
 val match_vardecl : Lexer.token list -> varDecl option * Lexer.token list
@@ -54,3 +67,6 @@ val format_asst : asst option -> string
 val match_arglist : Lexer.token list -> argList option * Lexer.token list
 val match_paramList : Lexer.token list -> paramList option * Lexer.token list
 val match_funcall : Lexer.token list -> funcCall option * Lexer.token list
+val match_loop : Lexer.token list -> loop option * Lexer.token list
+val match_block : Lexer.token list -> block option * Lexer.token list
+val match_stmt : Lexer.token list -> stmt list * Lexer.token list
