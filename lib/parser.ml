@@ -423,36 +423,36 @@ and match_stmt_helper (tokens : Lexer.token list) :
 (* FUNCTION DECLARATION *)
 let match_func_decl_helper (ret : ret_type) (fname : string)
     (tokens : Lexer.token list) : func_decl option * Lexer.token list =
-  (* matches  "(" param_list ")" block  
-            | "(" param_list ")" block return value ";"
+  (* matches  "(" param_list ")" "{" stmt "}"    
+            | "(" param_list ")" "{" stmt return value "}"  ";"
     *)
   match match_param_list tokens with
   (* get paramList *)
-  | params, R_PAREN :: rem_tokens -> (
+  | params, R_PAREN :: L_BRACE :: rem_tokens -> (
       (* try to match block *)
-      match match_block rem_tokens with
-      | Some b, RETURN :: r_tok -> (
+      match match_stmt rem_tokens with
+      | s :: st, RETURN :: r_tok -> (
           (* try to match retval *)
           match match_value r_tok with
-          | Some v, SEMICOLON :: toks ->
+          | Some v, SEMICOLON :: R_BRACE :: toks ->
               ( Some
                   {
                     func_name = IDENT fname;
                     return_type = ret;
                     params;
-                    body = b;
+                    body = STMTS (s :: st);
                     ret_val = VAL v;
                   },
                 toks )
           | _ -> (None, tokens))
-      | Some b, r ->
+      | [], R_BRACE :: r ->
           (* void function *)
           ( Some
               {
                 func_name = IDENT fname;
                 return_type = ret;
                 params;
-                body = b;
+                body = STMTS [];
                 ret_val = NONE;
               },
             r )
@@ -461,8 +461,8 @@ let match_func_decl_helper (ret : ret_type) (fname : string)
 
 let match_func_decl (tokens : Lexer.token list) :
     func_decl option * Lexer.token list =
-  (* func_decl = ret_type func_name "(" param_list ")" block  
-              = ret_type func_name "(" param_list ")" block return value ";"
+  (* func_decl = ret_type func_name "(" param_list ")" "{" stmt "}"  
+              = ret_type func_name "(" param_list ")" "{" stmt return value "}" ";"
     *)
   match tokens with
   | Lexer.DATATYPE d :: IDENTIFIER fname :: L_PAREN :: rem ->
