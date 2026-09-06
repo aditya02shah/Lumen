@@ -38,8 +38,14 @@ type cond_expr =
   | COMBINATION of logical_combination * bool_value * cond_expr
 
 (* variables *)
-type var_decl = { dtype : Lexer.dtype; vars : ident list }
 type asst = { name : ident; expr : expr }
+
+type var_decl =
+  (* just declaring *)
+  | DECL of { mut : bool; dtype : Lexer.dtype; vars : ident list }
+    (* declaring and assigning in same statement *)
+  | DECL_ASST of { mut : bool; dtype : Lexer.dtype; asst : asst }
+
 type arg_list = value list
 type func_call = { func_name : ident; args : arg_list }
 

@@ -38,8 +38,14 @@ type cond_expr =
   | COMBINATION of logical_combination * bool_value * cond_expr
 
 (* variables *)
-type var_decl = { dtype : Lexer.dtype; vars : ident list }
 type asst = { name : ident; expr : expr }
+
+type var_decl =
+  (* just declaring *)
+  | DECL of { mut : bool; dtype : Lexer.dtype; vars : ident list }
+    (* declaring and assigning in same statement *)
+  | DECL_ASST of { mut : bool; dtype : Lexer.dtype; asst : asst }
+
 type arg_list = value list
 type func_call = { func_name : ident; args : arg_list }
 
@@ -187,25 +193,51 @@ let match_asst (tokens : Lexer.token list) : asst option * Lexer.token list =
   | _ -> (None, tokens)
 
 (* VARIABLE DECLARATION *)
+let match_var_decl_helper (tokens : Lexer.token list) (dtype : Lexer.dtype)
+    (vname : string) (is_mutable : bool) : var_decl option * Lexer.token list =
+  (* find all var_name declarations matching ("," var_name)* *)
+  let rec loop (t : Lexer.token list) (accum : ident list) :
+      var_decl option * Lexer.token list =
+    match (t, accum) with
+    | SEMICOLON :: ts, a :: acs ->
+        (Some (DECL { mut = false; dtype; vars = List.rev (a :: acs) }), ts)
+    | COMMA :: IDENTIFIER v :: r, a :: acs -> loop r (IDENT v :: accum)
+    | _, _ -> (None, tokens)
+  in
+  loop tokens [ IDENT vname ]
+
 let match_var_decl (tokens : Lexer.token list) :
     var_decl option * Lexer.token list =
-  (* var_decl -> dtype var_name ("," var_name)* ";" *)
+  (* var_decl -> dtype var_name ("," var_name)* ";"
+              -> mut dtype var_name ("," var_name)* ";"
+              -> dtype asst 
+              -> mut dtype asst 
+  *)
   match tokens with
+  (* try matching var_decl -> dtype var_name ("," var_name)* ";"
+                           -> mut dtype var_name ("," var_name)* ";" *)
   (* single var decl *)
   | DATATYPE dtype :: IDENTIFIER vname :: SEMICOLON :: rem ->
-      (Some { dtype; vars = [ IDENT vname ] }, rem)
+      (Some (DECL { mut = false; dtype; vars = [ IDENT vname ] }), rem)
+  | MUT :: DATATYPE dtype :: IDENTIFIER vname :: SEMICOLON :: rem ->
+      (Some (DECL { mut = true; dtype; vars = [ IDENT vname ] }), rem)
   (* multiple var decl *)
-  | DATATYPE dtype :: IDENTIFIER vname :: rem ->
-      (* find all var_name declarations *)
-      let rec loop (t : Lexer.token list) (accum : ident list) :
-          var_decl option * Lexer.token list =
-        match (t, accum) with
-        | SEMICOLON :: ts, a :: acs ->
-            (Some { dtype; vars = List.rev (a :: acs) }, ts)
-        | COMMA :: IDENTIFIER v :: r, a :: acs -> loop r (IDENT v :: accum)
-        | _, _ -> (None, tokens)
-      in
-      loop rem [ IDENT vname ]
+  | DATATYPE dtype :: IDENTIFIER vname :: COMMA :: rem ->
+      match_var_decl_helper (COMMA :: rem) dtype vname false
+  | MUT :: DATATYPE dtype :: IDENTIFIER vname :: COMMA :: rem ->
+      match_var_decl_helper (COMMA :: rem) dtype vname true
+  (* try matching var_decl -> dtype asst
+                           -> mut dtype asst  *)
+  (* immutable decl *)
+  | DATATYPE dtype :: rem -> (
+      match match_asst rem with
+      | Some at, r -> (Some (DECL_ASST { mut = false; dtype; asst = at }), r)
+      | _ -> (None, tokens))
+  (* mutable decl *)
+  | MUT :: DATATYPE dtype :: rem -> (
+      match match_asst rem with
+      | Some at, r -> (Some (DECL_ASST { mut = true; dtype; asst = at }), r)
+      | _ -> (None, tokens))
   | _ -> (None, tokens)
 
 (* ARGUMENT LIST *)

@@ -275,11 +275,12 @@ let test_match_stmt2 _ =
   match match_stmt stmt_tokens2 with
   | ( [
         VARDECL
-          {
-            mut = false;
-            dtype = Lexer.INT;
-            vars = [ IDENT "i1"; IDENT "i2"; IDENT "i3" ];
-          };
+          (DECL
+             {
+               mut = false;
+               dtype = Lexer.INT;
+               vars = [ IDENT "i1"; IDENT "i2"; IDENT "i3" ];
+             });
       ],
       [] ) ->
       ()
@@ -312,11 +313,12 @@ let test_match_stmt3 _ =
                  STMTS
                    [
                      VARDECL
-                       {
-                         mut = false;
-                         dtype = Lexer.INT;
-                         vars = [ IDENT "local_var" ];
-                       };
+                       (DECL
+                          {
+                            mut = false;
+                            dtype = Lexer.INT;
+                            vars = [ IDENT "local_var" ];
+                          });
                    ];
              });
       ],
@@ -340,7 +342,12 @@ let test_match_block _ =
         (STMTS
            [
              VARDECL
-               { mut = false; dtype = Lexer.INT; vars = [ IDENT "local_var" ] };
+               (DECL
+                  {
+                    mut = false;
+                    dtype = Lexer.INT;
+                    vars = [ IDENT "local_var" ];
+                  });
            ]),
       _ ) ->
       ()
@@ -395,11 +402,12 @@ let test_match_funcdecl1 _ =
             STMTS
               [
                 VARDECL
-                  {
-                    mut = false;
-                    dtype = Lexer.INT;
-                    vars = [ IDENT "local_var" ];
-                  };
+                  (DECL
+                     {
+                       mut = false;
+                       dtype = Lexer.INT;
+                       vars = [ IDENT "local_var" ];
+                     });
               ];
           ret_val = VAL (NUMBER 5);
         },
@@ -434,11 +442,12 @@ let test_match_funcdecl2 _ =
             STMTS
               [
                 VARDECL
-                  {
-                    mut = false;
-                    dtype = Lexer.INT;
-                    vars = [ IDENT "local_var" ];
-                  };
+                  (DECL
+                     {
+                       mut = false;
+                       dtype = Lexer.INT;
+                       vars = [ IDENT "local_var" ];
+                     });
               ];
           ret_val = VAL (NUMBER 5);
         },
