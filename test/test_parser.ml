@@ -275,7 +275,11 @@ let test_match_stmt2 _ =
   match match_stmt stmt_tokens2 with
   | ( [
         VARDECL
-          { dtype = Lexer.INT; vars = [ IDENT "i1"; IDENT "i2"; IDENT "i3" ] };
+          {
+            mut = false;
+            dtype = Lexer.INT;
+            vars = [ IDENT "i1"; IDENT "i2"; IDENT "i3" ];
+          };
       ],
       [] ) ->
       ()
@@ -307,7 +311,12 @@ let test_match_stmt3 _ =
                body =
                  STMTS
                    [
-                     VARDECL { dtype = Lexer.INT; vars = [ IDENT "local_var" ] };
+                     VARDECL
+                       {
+                         mut = false;
+                         dtype = Lexer.INT;
+                         vars = [ IDENT "local_var" ];
+                       };
                    ];
              });
       ],
@@ -328,7 +337,11 @@ let block_tokens =
 let test_match_block _ =
   match match_block block_tokens with
   | ( Some
-        (STMTS [ VARDECL { dtype = Lexer.INT; vars = [ IDENT "local_var" ] } ]),
+        (STMTS
+           [
+             VARDECL
+               { mut = false; dtype = Lexer.INT; vars = [ IDENT "local_var" ] };
+           ]),
       _ ) ->
       ()
   | _ -> assert_failure "unexpected block"
@@ -365,10 +378,10 @@ let funcdecl_tokens1 =
     Lexer.DATATYPE INT;
     Lexer.IDENTIFIER "local_var";
     Lexer.SEMICOLON;
-    Lexer.R_BRACE;
     Lexer.RETURN;
     Lexer.NUMBER 5;
     Lexer.SEMICOLON;
+    Lexer.R_BRACE;
   ]
 
 let test_match_funcdecl1 _ =
@@ -380,7 +393,14 @@ let test_match_funcdecl1 _ =
           params = [ (Lexer.INT, IDENT "p1"); (Lexer.BOOL, IDENT "p2") ];
           body =
             STMTS
-              [ VARDECL { dtype = Lexer.INT; vars = [ IDENT "local_var" ] } ];
+              [
+                VARDECL
+                  {
+                    mut = false;
+                    dtype = Lexer.INT;
+                    vars = [ IDENT "local_var" ];
+                  };
+              ];
           ret_val = VAL (NUMBER 5);
         },
       _ ) ->
@@ -397,10 +417,10 @@ let funcdecl_tokens2 =
     Lexer.DATATYPE INT;
     Lexer.IDENTIFIER "local_var";
     Lexer.SEMICOLON;
-    Lexer.R_BRACE;
     Lexer.RETURN;
     Lexer.NUMBER 5;
     Lexer.SEMICOLON;
+    Lexer.R_BRACE;
   ]
 
 let test_match_funcdecl2 _ =
@@ -412,7 +432,14 @@ let test_match_funcdecl2 _ =
           params = [];
           body =
             STMTS
-              [ VARDECL { dtype = Lexer.INT; vars = [ IDENT "local_var" ] } ];
+              [
+                VARDECL
+                  {
+                    mut = false;
+                    dtype = Lexer.INT;
+                    vars = [ IDENT "local_var" ];
+                  };
+              ];
           ret_val = VAL (NUMBER 5);
         },
       _ ) ->

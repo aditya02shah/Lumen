@@ -40,6 +40,8 @@ type cond_expr =
 (* variables *)
 type var_decl = { dtype : Lexer.dtype; vars : ident list }
 type asst = { name : ident; expr : expr }
+type arg_list = value list
+type func_call = { func_name : ident; args : arg_list }
 
 (* statement *)
 type stmt =
@@ -47,6 +49,7 @@ type stmt =
   | ASST of asst
   | LOOP of loop
   | EXP of expr
+  | FUNC_CALL of func_call
   | EMPTY
 
 and block = STMTS of stmt list
@@ -65,9 +68,6 @@ type func_decl = {
   body : block;
   ret_val : ret_val;
 }
-
-type arg_list = value list
-type func_call = { func_name : ident; args : arg_list }
 
 (* helper functions *)
 let rec format_expr expr =
@@ -153,8 +153,10 @@ and match_term (tokens : Lexer.token list) : expr option * Lexer.token list =
 
 and match_factor (tokens : Lexer.token list) : expr option * Lexer.token list =
   (* returns a factor along with the remaining tokens *)
-  (* factor -> Identifier | Number | "(" expr ")" *)
+  (* factor -> Identifier | Number | Identifier++ | "(" expr ")" *)
   match tokens with
+  (* try to match identifier++ *)
+  | IDENTIFIER i :: INCREMENT :: rem -> (Some (INCREMENT (VAR (IDENT i))), rem)
   (* try to match an identifier *)
   | IDENTIFIER i :: rem -> (Some (VAR (IDENT i)), rem)
   (* try to match a number *)
@@ -401,7 +403,7 @@ and match_stmt (tokens : Lexer.token list) : stmt list * Lexer.token list =
 
 and match_stmt_helper (tokens : Lexer.token list) :
     stmt option * Lexer.token list =
-  (* match a single statement (stmt =  (var_decl | asst | loop | (expr ";")) *)
+  (* match a single statement (stmt =  (var_decl | asst | loop | (expr ";") | func_call )* *)
 
   (* try to match var_decl *)
   match match_var_decl tokens with
@@ -418,7 +420,11 @@ and match_stmt_helper (tokens : Lexer.token list) :
               (* try to match expr *)
               match match_expr tokens with
               | Some e, SEMICOLON :: rem_tok -> (Some (EXP e), rem_tok)
-              | _ -> (None, tokens))))
+              | _ -> (
+                  (* try to match func_call*)
+                  match match_func_call tokens with
+                  | Some fc, rt -> (Some (FUNC_CALL fc), rt)
+                  | _ -> (None, tokens)))))
 
 (* FUNCTION DECLARATION *)
 let match_func_decl_helper (ret : ret_type) (fname : string)

@@ -40,6 +40,8 @@ type cond_expr =
 (* variables *)
 type var_decl = { dtype : Lexer.dtype; vars : ident list }
 type asst = { name : ident; expr : expr }
+type arg_list = value list
+type func_call = { func_name : ident; args : arg_list }
 
 (* statement *)
 type stmt =
@@ -47,6 +49,7 @@ type stmt =
   | ASST of asst
   | LOOP of loop
   | EXP of expr
+  | FUNC_CALL of func_call
   | EMPTY
 
 and block = STMTS of stmt list
@@ -65,9 +68,6 @@ type func_decl = {
   body : block;
   ret_val : ret_val;
 }
-
-type arg_list = value list
-type func_call = { func_name : ident; args : arg_list }
 
 val match_expr : Lexer.token list -> expr option * Lexer.token list
 val format_expr : expr -> string
