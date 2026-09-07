@@ -71,6 +71,7 @@ type param_list = (Lexer.dtype * ident) list
 type func_decl = {
   func_name : ident;
   return_type : ret_type;
+  is_optional_type : bool;
   params : param_list;
   body : block;
   ret_expr : ret_expr;
@@ -459,7 +460,33 @@ and match_stmt_helper (tokens : Lexer.token list) :
               (* try to match expr *)
               match match_expr tokens with
               | Some e, SEMICOLON :: rem_tok -> (Some (EXP e), rem_tok)
-              | _ -> (None, tokens))))
+              | _ -> (
+                  (* try to match return expr *)
+                  match match_ret_expr tokens with
+                  | Some rt, rtok -> (Some (RETURN rt), rtok)
+                  (* try to match ctrl flow *)
+                  | _ -> match_ctrl_flow tokens))))
+
+and match_ret_expr (tokens : Lexer.token list) :
+    ret_expr option * Lexer.token list =
+  (* ret_expr -> return expr ";"  
+              -> return Some expr ";"      
+              -> return None ";"      
+  *)
+  match tokens with
+  (* try to match return None ";" *)
+  | RETURN :: NONE :: SEMICOLON :: rem -> (Some NONE, rem)
+  (* try to match return Some expr ";"  *)
+  | RETURN :: SOME :: rem -> (
+      match match_expr rem with
+      | Some e, SEMICOLON :: r -> (Some (SOME_EXPR e), r)
+      | _ -> (None, tokens))
+  (* try to match return expr ";" *)
+  | RETURN :: rem -> (
+      match match_expr rem with
+      | Some e, SEMICOLON :: r -> (Some (EXPR e), r)
+      | _ -> (None, tokens))
+  | _ -> (None, tokens)
 
 (* FUNCTION DECLARATION *)
 let match_func_decl_helper (ret : ret_type) (fname : string)
@@ -493,8 +520,8 @@ let match_func_decl_helper (ret : ret_type) (fname : string)
                 func_name = IDENT fname;
                 return_type = ret;
                 params;
-                body = STMTS [];
-                ret_expr = NONE;
+                is_optional_type = is_optional;
+                body = blk;
               },
             r )
       | _ -> (None, tokens))
