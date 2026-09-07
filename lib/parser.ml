@@ -204,7 +204,7 @@ let rec match_expr (tokens : Lexer.token list) : expr option * Lexer.token list
 
 and match_term (tokens : Lexer.token list) : expr option * Lexer.token list =
   (* returns an expression along with the remaining tokens *)
-  (* term -> factor (("/" | "*") factor)* *)
+  (* term -> factor (("/" | "*" | "%" | "^") factor)* *)
 
   (* try to match factor *)
   match match_factor tokens with
@@ -214,7 +214,7 @@ and match_term (tokens : Lexer.token list) : expr option * Lexer.token list =
       let rec loop (t : Lexer.token list) (left : expr) :
           expr option * Lexer.token list =
         match t with
-        | ((MULTIPLY | DIVIDE) as op) :: r -> (
+        | ((MULTIPLY | DIVIDE | MOD | POW) as op) :: r -> (
             match match_factor r with
             | Some right, rem_tok ->
                 let left = construct_expr op left right in
