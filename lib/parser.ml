@@ -119,7 +119,7 @@ let rec continue (t : Lexer.token list)
 
 (* ARGUMENT LIST *)
 let match_value (tokens : Lexer.token list) : value option * Lexer.token list =
-  (* value = IDENTIFIER | INT | BOOLEAN *)
+  (* value -> IDENTIFIER | INT | BOOLEAN *)
   match tokens with
   | Lexer.NUMBER n :: rem -> (Some (NUMBER n), rem)
   | Lexer.BOOLEAN b :: rem -> (Some (BOOLEAN b), rem)
@@ -185,7 +185,6 @@ let match_func_call (tokens : Lexer.token list) :
 (* EXPRESSION *)
 let rec match_expr (tokens : Lexer.token list) : expr option * Lexer.token list
     =
-  (* returns an expression along with the remaining tokens *)
   (* expr -> term (("+" | "-") term)* *)
 
   (* try to match term *)
@@ -207,7 +206,6 @@ let rec match_expr (tokens : Lexer.token list) : expr option * Lexer.token list
       loop rem left
 
 and match_term (tokens : Lexer.token list) : expr option * Lexer.token list =
-  (* returns an expression along with the remaining tokens *)
   (* term -> factor (("/" | "*" | "%" | "^") factor)* *)
 
   (* try to match factor *)
@@ -229,7 +227,6 @@ and match_term (tokens : Lexer.token list) : expr option * Lexer.token list =
       loop rem left
 
 and match_factor (tokens : Lexer.token list) : expr option * Lexer.token list =
-  (* returns a factor along with the remaining tokens *)
   (* factor -> Identifier | Number | Identifier++ | func_call | "(" expr ")" *)
   match tokens with
   (* try to match identifier++ *)
@@ -319,7 +316,7 @@ let match_var_decl (tokens : Lexer.token list) :
 (* CONDITIONAL EXPRESSION *)
 let match_valcmp (tokens : Lexer.token list) :
     bool_value option * Lexer.token list =
-  (* valcmp = "(" val logical_compare val ")"*)
+  (* valcmp -> "(" val logical_compare val ")"*)
   match tokens with
   (* try to match "(" *)
   | L_PAREN :: rem_tokens -> (
@@ -349,7 +346,7 @@ let match_valcmp (tokens : Lexer.token list) :
 
 let match_boolcmp (tokens : Lexer.token list) :
     bool_value option * Lexer.token list =
-  (* boolcmp = "(" bool logical_combination bool ")"*)
+  (* boolcmp -> "(" bool logical_combination bool ")"*)
   match tokens with
   | L_PAREN :: BOOLEAN op1 :: LOGICAL_AND :: BOOLEAN op2 :: R_PAREN :: r ->
       (Some (BOOL_CMP (LOGICAL_AND, op1, op2)), r)
@@ -378,8 +375,8 @@ let match_boolval (tokens : Lexer.token list) :
 let rec match_cond_expr (tokens : Lexer.token list) :
     cond_expr option * Lexer.token list =
   (* 
-  condexpr = boolval
-           = boolval (logical_combination condexpr)
+  condexpr -> boolval
+           -> boolval (logical_combination condexpr)
   *)
 
   (* try to match boolval *)
@@ -402,7 +399,7 @@ let rec match_cond_expr (tokens : Lexer.token list) :
 (* STATEMENT *)
 let rec match_loop (tokens : Lexer.token list) : loop option * Lexer.token list
     =
-  (* loop = while cond block *)
+  (* loop -> while cond block *)
   match tokens with
   (* try to match while *)
   | WHILE :: rem_tokens -> (
@@ -419,7 +416,7 @@ let rec match_loop (tokens : Lexer.token list) : loop option * Lexer.token list
   | _ -> (None, tokens)
 
 and match_block (tokens : Lexer.token list) : block option * Lexer.token list =
-  (* block = "{" stmt "}" *)
+  (* block -> "{" stmt "}" *)
   match tokens with
   (* try to match "{" *)
   | L_BRACE :: rem_tokens -> (
@@ -454,7 +451,7 @@ and match_ctrl_flow (tokens : Lexer.token list) : stmt option * Lexer.token list
   | _ -> (None, tokens)
 
 and match_stmt (tokens : Lexer.token list) : stmt list * Lexer.token list =
-  (* stmt =  (var_decl | asst | loop | (expr ";"))* *)
+  (* stmt -> (var_decl | asst | loop | expr ";") | func_call | ctrl_flow)* *)
   let rec loop (t : Lexer.token list) (accum : stmt list) :
       stmt list * Lexer.token list =
     (* match all valid stmts *)
@@ -518,7 +515,7 @@ and match_ret_expr (tokens : Lexer.token list) :
 let match_func_decl_helper (tokens : Lexer.token list) (ret : ret_type)
     (fname : string) (is_optional : bool) : func_decl option * Lexer.token list
     =
-  (* helps match func_decl = param_list ")" block *)
+  (* helps match func_decl -> param_list ")" block *)
 
   (* try to match param_list *)
   match match_param_list tokens with
@@ -540,7 +537,7 @@ let match_func_decl_helper (tokens : Lexer.token list) (ret : ret_type)
 
 let match_func_decl (tokens : Lexer.token list) :
     func_decl option * Lexer.token list =
-  (* func_decl = ret_type func_name "(" param_list ")" block *)
+  (* func_decl -> ret_type func_name "(" param_list ")" block *)
   match tokens with
   | OPTION :: Lexer.DATATYPE d :: IDENTIFIER fname :: L_PAREN :: rem ->
       match_func_decl_helper rem (DATATYPE d) fname true
