@@ -11,6 +11,8 @@ type token =
   | WHILE
   | RETURN
   | MUT
+  | IF
+  | ELSE
   (* syntax *)
   | DATATYPE of dtype
   | VOID
@@ -75,6 +77,8 @@ let format_token (t : token) : string =
   | WHILE -> "WHILE"
   | RETURN -> "RETURN"
   | MUT -> "MUT"
+  | IF -> "IF"
+  | ELSE -> "ELSE"
   (* syntax *)
   | DATATYPE d -> (
       match d with INT -> "DATATYPE: INT" | BOOL -> "DATATYPE: BOOL")
@@ -216,6 +220,8 @@ let rec tokenize_helper (accum : token list) (prog : string list) : token list =
       | "while" -> tokenize_helper (WHILE :: accum) rest
       | "return" -> tokenize_helper (RETURN :: accum) rest
       | "mut" -> tokenize_helper (MUT :: accum) rest
+      | "if" -> tokenize_helper (IF :: accum) rest
+      | "else" -> tokenize_helper (IF :: accum) rest
       (* syntax *)
       | "int" -> tokenize_helper (DATATYPE INT :: accum) rest
       | "bool" -> tokenize_helper (DATATYPE BOOL :: accum) rest

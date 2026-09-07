@@ -52,12 +52,16 @@ type var_decl =
   | DECL_ASST of { mut : bool; dtype : Lexer.dtype; asst : asst }
 
 (* statement *)
+type ret_expr = EXPR of expr | SOME_EXPR of expr | NONE
+
 type stmt =
   | VARDECL of var_decl
   | ASST of asst
   | LOOP of loop
+  | IF of block
+  | IF_ELSE of block * block
+  | RETURN of ret_expr
   | EXP of expr
-  (* | FUNC_CALL of func_call *)
   | EMPTY
 
 and block = STMTS of stmt list
@@ -66,15 +70,14 @@ and loop = WHILE of while_loop
 
 (* function decl *)
 type ret_type = DATATYPE of Lexer.dtype | VOID
-type ret_expr = EXPR of expr | NONE
 type param_list = (Lexer.dtype * ident) list
 
 type func_decl = {
   func_name : ident;
   return_type : ret_type;
+  is_optional_type : bool;
   params : param_list;
   body : block;
-  ret_expr : ret_expr;
 }
 
 val match_expr : Lexer.token list -> expr option * Lexer.token list

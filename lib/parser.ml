@@ -52,10 +52,15 @@ type var_decl =
   | DECL_ASST of { mut : bool; dtype : Lexer.dtype; asst : asst }
 
 (* statement *)
+type ret_expr = EXPR of expr | SOME_EXPR of expr | NONE
+
 type stmt =
   | VARDECL of var_decl
   | ASST of asst
   | LOOP of loop
+  | IF of block
+  | IF_ELSE of block * block
+  | RETURN of ret_expr
   | EXP of expr
   | EMPTY
 
@@ -65,7 +70,6 @@ and loop = WHILE of while_loop
 
 (* function decl *)
 type ret_type = DATATYPE of Lexer.dtype | VOID
-type ret_expr = EXPR of expr | NONE
 type param_list = (Lexer.dtype * ident) list
 
 type func_decl = {
@@ -74,7 +78,6 @@ type func_decl = {
   is_optional_type : bool;
   params : param_list;
   body : block;
-  ret_expr : ret_expr;
 }
 
 (* helper functions *)
@@ -427,6 +430,29 @@ and match_block (tokens : Lexer.token list) : block option * Lexer.token list =
       | _ -> (None, tokens))
   | _ -> (None, tokens)
 
+and match_ctrl_flow (tokens : Lexer.token list) : stmt option * Lexer.token list
+    =
+  (* ctrl_flow -> if cond block 
+               -> if cond block else block
+  *)
+  match tokens with
+  (* try to match "if"*)
+  | IF :: rem -> (
+      (* try to match cond *)
+      match match_cond_expr rem with
+      | Some exp, r -> (
+          (* try to match block *)
+          match match_block r with
+          (* try to match "else" block *)
+          | Some if_blk, ELSE :: rem_tok -> (
+              match match_block rem_tok with
+              | Some else_blk, rtok -> (Some (IF_ELSE (if_blk, else_blk)), rtok)
+              | _ -> (None, tokens))
+          | Some if_blk, rem_tok -> (Some (IF if_blk), rem_tok)
+          | _ -> (None, tokens))
+      | _ -> (None, tokens))
+  | _ -> (None, tokens)
+
 and match_stmt (tokens : Lexer.token list) : stmt list * Lexer.token list =
   (* stmt =  (var_decl | asst | loop | (expr ";"))* *)
   let rec loop (t : Lexer.token list) (accum : stmt list) :
@@ -443,7 +469,7 @@ and match_stmt (tokens : Lexer.token list) : stmt list * Lexer.token list =
 
 and match_stmt_helper (tokens : Lexer.token list) :
     stmt option * Lexer.token list =
-  (* match a single statement (stmt =  (var_decl | asst | loop | (expr ";") | func_call )* *)
+  (* match a single statement (stmt = (var_decl | asst | loop | expr ";" | return expr ";" | func_call | ctrl_flow )* *)
 
   (* try to match var_decl *)
   match match_var_decl tokens with
@@ -489,32 +515,17 @@ and match_ret_expr (tokens : Lexer.token list) :
   | _ -> (None, tokens)
 
 (* FUNCTION DECLARATION *)
-let match_func_decl_helper (ret : ret_type) (fname : string)
-    (tokens : Lexer.token list) : func_decl option * Lexer.token list =
-  (* matches  "(" param_list ")" "{" stmt "}"    
-            | "(" param_list ")" "{" stmt return expr ";" "}"  
-    *)
+let match_func_decl_helper (tokens : Lexer.token list) (ret : ret_type)
+    (fname : string) (is_optional : bool) : func_decl option * Lexer.token list
+    =
+  (* helps match func_decl = param_list ")" block *)
+
+  (* try to match param_list *)
   match match_param_list tokens with
-  (* get paramList *)
-  | params, R_PAREN :: L_BRACE :: rem_tokens -> (
+  | params, R_PAREN :: rem -> (
       (* try to match block *)
-      match match_stmt rem_tokens with
-      | st, RETURN :: r_tok -> (
-          (* try to match retval *)
-          match match_expr r_tok with
-          | Some exp, SEMICOLON :: R_BRACE :: toks ->
-              ( Some
-                  {
-                    func_name = IDENT fname;
-                    return_type = ret;
-                    params;
-                    body = STMTS st;
-                    ret_expr = EXPR exp;
-                  },
-                toks )
-          | _ -> (None, tokens))
-      | st, R_BRACE :: r ->
-          (* void function *)
+      match match_block rem with
+      | Some blk, r ->
           ( Some
               {
                 func_name = IDENT fname;
@@ -529,12 +540,12 @@ let match_func_decl_helper (ret : ret_type) (fname : string)
 
 let match_func_decl (tokens : Lexer.token list) :
     func_decl option * Lexer.token list =
-  (* func_decl = ret_type func_name "(" param_list ")" "{" stmt "}"  
-              = ret_type func_name "(" param_list ")" "{" stmt return value ";" "}" 
-    *)
+  (* func_decl = ret_type func_name "(" param_list ")" block *)
   match tokens with
+  | OPTION :: Lexer.DATATYPE d :: IDENTIFIER fname :: L_PAREN :: rem ->
+      match_func_decl_helper rem (DATATYPE d) fname true
   | Lexer.DATATYPE d :: IDENTIFIER fname :: L_PAREN :: rem ->
-      match_func_decl_helper (DATATYPE d) fname rem
+      match_func_decl_helper rem (DATATYPE d) fname false
   | VOID :: IDENTIFIER fname :: L_PAREN :: rem ->
-      match_func_decl_helper VOID fname rem
+      match_func_decl_helper rem VOID fname false
   | _ -> (None, tokens)

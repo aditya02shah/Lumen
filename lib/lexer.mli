@@ -10,6 +10,8 @@ type token =
   | WHILE
   | RETURN
   | MUT
+  | IF
+  | ELSE
   (* syntax *)
   | DATATYPE of dtype
   | VOID
