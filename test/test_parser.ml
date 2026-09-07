@@ -408,8 +408,8 @@ let test_match_funcdecl1 _ =
                        dtype = Lexer.INT;
                        vars = [ IDENT "local_var" ];
                      });
+                RETURN (EXPR (INT 5));
               ];
-          ret_expr = EXPR (INT 5);
         },
       _ ) ->
       ()
@@ -448,8 +448,8 @@ let test_match_funcdecl2 _ =
                        dtype = Lexer.INT;
                        vars = [ IDENT "local_var" ];
                      });
+                RETURN (EXPR (INT 5));
               ];
-          ret_expr = EXPR (INT 5);
         },
       _ ) ->
       ()
