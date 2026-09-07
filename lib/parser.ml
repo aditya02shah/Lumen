@@ -6,6 +6,10 @@ exception Invalid_expr
 type ident = IDENT of string
 type value = IDENTIFIER of ident | NUMBER of int | BOOLEAN of bool
 
+(* func call *)
+type arg_list = value list
+type func_call = { func_name : ident; args : arg_list }
+
 (* expression *)
 type arithmetic_op = ADD | MULTIPLY | SUBTRACT | DIVIDE | MOD | POW
 
@@ -14,6 +18,7 @@ type expr =
   | STRING of string
   | VAR of ident
   | INCREMENT of expr
+  | FUNC_CALL of func_call
   | BINARY of arithmetic_op * expr * expr
 
 (* conditional expression *)
@@ -46,25 +51,21 @@ type var_decl =
     (* declaring and assigning in same statement *)
   | DECL_ASST of { mut : bool; dtype : Lexer.dtype; asst : asst }
 
-type arg_list = value list
-type func_call = { func_name : ident; args : arg_list }
-
 (* statement *)
 type stmt =
   | VARDECL of var_decl
   | ASST of asst
   | LOOP of loop
   | EXP of expr
-  | FUNC_CALL of func_call
   | EMPTY
 
 and block = STMTS of stmt list
 and while_loop = { cond : cond_expr; body : block }
 and loop = WHILE of while_loop
 
-(* functions *)
+(* function decl *)
 type ret_type = DATATYPE of Lexer.dtype | VOID
-type ret_val = VAL of value | NONE
+type ret_expr = EXPR of expr | NONE
 type param_list = (Lexer.dtype * ident) list
 
 type func_decl = {
@@ -72,7 +73,7 @@ type func_decl = {
   return_type : ret_type;
   params : param_list;
   body : block;
-  ret_val : ret_val;
+  ret_expr : ret_expr;
 }
 
 (* helper functions *)
@@ -82,6 +83,7 @@ let rec format_expr expr =
   | STRING s -> Printf.sprintf "STRING(%S)" s
   | INCREMENT e -> Printf.sprintf "INCREMENT(%s)" (format_expr e)
   | VAR (IDENT i) -> Printf.sprintf "IDENT(%s)" i
+  | FUNC_CALL fc -> "FUNCCALL"
   | BINARY (op, e1, e2) ->
       let op_str =
         match op with
@@ -110,6 +112,71 @@ let rec continue (t : Lexer.token list)
     (next : Lexer.token list -> 'a option * Lexer.token list) :
     'b option * Lexer.token list =
   match curr t with Some v, r -> (Some v, r) | None, _ -> next t
+
+(* ARGUMENT LIST *)
+let match_value (tokens : Lexer.token list) : value option * Lexer.token list =
+  (* value = IDENTIFIER | INT | BOOLEAN *)
+  match tokens with
+  | Lexer.NUMBER n :: rem -> (Some (NUMBER n), rem)
+  | Lexer.BOOLEAN b :: rem -> (Some (BOOLEAN b), rem)
+  | Lexer.IDENTIFIER i :: rem -> (Some (IDENTIFIER (IDENT i)), rem)
+  | _ -> (None, tokens)
+
+let match_arg_list (tokens : Lexer.token list) :
+    arg_list option * Lexer.token list =
+  (* arg_list -> [] | value ("," value)* *)
+  (* try to match value *)
+  match match_value tokens with
+  | Some v, [] -> (Some [ v ], [])
+  | Some v, rem ->
+      (* match as as many (",", value) pairs *)
+      let rec loop (t : Lexer.token list) (accum : arg_list) :
+          arg_list option * Lexer.token list =
+        match t with
+        (* try to match comma *)
+        | COMMA :: ts -> (
+            (* try to match another value *)
+            match match_value ts with
+            | Some newval, r -> loop r (newval :: accum)
+            | _, _ -> (None, tokens) (* return arguments matched so far *))
+        | _ -> (Some (List.rev accum), t)
+      in
+      loop rem [ v ]
+  (* empty arglist *)
+  | _, _ -> (Some [], tokens)
+
+(* PARAMETER LIST *)
+let match_param_list (tokens : Lexer.token list) : param_list * Lexer.token list
+    =
+  (* paramList -> [] | dtype Identifier ("," dtype Identifier)* *)
+  match tokens with
+  | DATATYPE d :: IDENTIFIER pname :: rem ->
+      (* try to match dtype *)
+      let rec loop (t : Lexer.token list) (accum : param_list) :
+          param_list * Lexer.token list =
+        (* match all possible (dtype identifier) pairs *)
+        match t with
+        | COMMA :: DATATYPE t :: IDENTIFIER p :: r ->
+            loop r ((t, IDENT p) :: accum)
+        | _ -> (List.rev accum, t)
+      in
+      loop rem [ (d, IDENT pname) ]
+  | _ -> ([], tokens)
+
+(* FUNCTION CALL *)
+let match_func_call (tokens : Lexer.token list) :
+    func_call option * Lexer.token list =
+  (* func_call -> func_name "(" arg_list ")" ";" *)
+
+  (* try to match func_name *)
+  match tokens with
+  | IDENTIFIER fname :: L_PAREN :: rem -> (
+      (* try to match ")" & ";" *)
+      match match_arg_list rem with
+      | Some args, Lexer.R_PAREN :: r ->
+          (Some { func_name = IDENT fname; args }, r)
+      | _ -> (None, tokens))
+  | _ -> (None, tokens)
 
 (* EXPRESSION *)
 let rec match_expr (tokens : Lexer.token list) : expr option * Lexer.token list
@@ -159,10 +226,15 @@ and match_term (tokens : Lexer.token list) : expr option * Lexer.token list =
 
 and match_factor (tokens : Lexer.token list) : expr option * Lexer.token list =
   (* returns a factor along with the remaining tokens *)
-  (* factor -> Identifier | Number | Identifier++ | "(" expr ")" *)
+  (* factor -> Identifier | Number | Identifier++ | func_call | "(" expr ")" *)
   match tokens with
   (* try to match identifier++ *)
   | IDENTIFIER i :: INCREMENT :: rem -> (Some (INCREMENT (VAR (IDENT i))), rem)
+  (* try to match func_call *)
+  | IDENTIFIER i :: L_PAREN :: r -> (
+      match match_func_call tokens with
+      | Some fc, rem -> (Some (FUNC_CALL fc), rem)
+      | _ -> (None, tokens))
   (* try to match an identifier *)
   | IDENTIFIER i :: rem -> (Some (VAR (IDENT i)), rem)
   (* try to match a number *)
@@ -239,71 +311,6 @@ let match_var_decl (tokens : Lexer.token list) :
       | Some at, r -> (Some (DECL_ASST { mut = true; dtype; asst = at }), r)
       | _ -> (None, tokens))
   | _ -> (None, tokens)
-
-(* ARGUMENT LIST *)
-let match_value (tokens : Lexer.token list) : value option * Lexer.token list =
-  (* value = IDENTIFIER | INT | BOOLEAN *)
-  match tokens with
-  | Lexer.NUMBER n :: rem -> (Some (NUMBER n), rem)
-  | Lexer.BOOLEAN b :: rem -> (Some (BOOLEAN b), rem)
-  | Lexer.IDENTIFIER i :: rem -> (Some (IDENTIFIER (IDENT i)), rem)
-  | _ -> (None, tokens)
-
-let match_arg_list (tokens : Lexer.token list) :
-    arg_list option * Lexer.token list =
-  (* arg_list -> [] | value ("," value)* *)
-  (* try to match value *)
-  match match_value tokens with
-  | Some v, [] -> (Some [ v ], [])
-  | Some v, rem ->
-      (* match as as many (",", value) pairs *)
-      let rec loop (t : Lexer.token list) (accum : arg_list) :
-          arg_list option * Lexer.token list =
-        match t with
-        (* try to match comma *)
-        | COMMA :: ts -> (
-            (* try to match another value *)
-            match match_value ts with
-            | Some newval, r -> loop r (newval :: accum)
-            | _, _ -> (None, tokens) (* return arguments matched so far *))
-        | _ -> (Some (List.rev accum), t)
-      in
-      loop rem [ v ]
-  (* empty arglist *)
-  | _, _ -> (Some [], tokens)
-
-(* FUNCTION CALL *)
-let match_func_call (tokens : Lexer.token list) :
-    func_call option * Lexer.token list =
-  (* func_call -> func_name "(" arg_list ")" ";" *)
-
-  (* try to match func_name *)
-  match tokens with
-  | IDENTIFIER fname :: L_PAREN :: rem -> (
-      (* try to match ")" & ";" *)
-      match match_arg_list rem with
-      | Some args, Lexer.R_PAREN :: Lexer.SEMICOLON :: r ->
-          (Some { func_name = IDENT fname; args }, r)
-      | _ -> (None, tokens))
-  | _ -> (None, tokens)
-
-(* PARAMETER LIST *)
-let match_param_list (tokens : Lexer.token list) : param_list * Lexer.token list
-    =
-  (* paramList -> [] | dtype Identifier ("," dtype Identifier)* *)
-  match tokens with
-  | DATATYPE d :: IDENTIFIER pname :: rem ->
-      (* try to match dtype *)
-      let rec loop (t : Lexer.token list) (accum : param_list) :
-          param_list * Lexer.token list =
-        (* match all possible (dtype identifier) pairs *)
-        match t with
-        | COMMA :: DATATYPE t :: IDENTIFIER p :: r ->
-            loop r ((t, IDENT p) :: accum)
-        | _ -> (List.rev accum, t)
-      in
-      loop rem [ (d, IDENT pname) ]
-  | _ -> ([], tokens)
 
 (* CONDITIONAL EXPRESSION *)
 let match_valcmp (tokens : Lexer.token list) :
@@ -452,38 +459,34 @@ and match_stmt_helper (tokens : Lexer.token list) :
               (* try to match expr *)
               match match_expr tokens with
               | Some e, SEMICOLON :: rem_tok -> (Some (EXP e), rem_tok)
-              | _ -> (
-                  (* try to match func_call*)
-                  match match_func_call tokens with
-                  | Some fc, rt -> (Some (FUNC_CALL fc), rt)
-                  | _ -> (None, tokens)))))
+              | _ -> (None, tokens))))
 
 (* FUNCTION DECLARATION *)
 let match_func_decl_helper (ret : ret_type) (fname : string)
     (tokens : Lexer.token list) : func_decl option * Lexer.token list =
   (* matches  "(" param_list ")" "{" stmt "}"    
-            | "(" param_list ")" "{" stmt return value "}"  ";"
+            | "(" param_list ")" "{" stmt return expr ";" "}"  
     *)
   match match_param_list tokens with
   (* get paramList *)
   | params, R_PAREN :: L_BRACE :: rem_tokens -> (
       (* try to match block *)
       match match_stmt rem_tokens with
-      | s :: st, RETURN :: r_tok -> (
+      | st, RETURN :: r_tok -> (
           (* try to match retval *)
-          match match_value r_tok with
-          | Some v, SEMICOLON :: R_BRACE :: toks ->
+          match match_expr r_tok with
+          | Some exp, SEMICOLON :: R_BRACE :: toks ->
               ( Some
                   {
                     func_name = IDENT fname;
                     return_type = ret;
                     params;
-                    body = STMTS (s :: st);
-                    ret_val = VAL v;
+                    body = STMTS st;
+                    ret_expr = EXPR exp;
                   },
                 toks )
           | _ -> (None, tokens))
-      | [], R_BRACE :: r ->
+      | st, R_BRACE :: r ->
           (* void function *)
           ( Some
               {
@@ -491,7 +494,7 @@ let match_func_decl_helper (ret : ret_type) (fname : string)
                 return_type = ret;
                 params;
                 body = STMTS [];
-                ret_val = NONE;
+                ret_expr = NONE;
               },
             r )
       | _ -> (None, tokens))
@@ -500,7 +503,7 @@ let match_func_decl_helper (ret : ret_type) (fname : string)
 let match_func_decl (tokens : Lexer.token list) :
     func_decl option * Lexer.token list =
   (* func_decl = ret_type func_name "(" param_list ")" "{" stmt "}"  
-              = ret_type func_name "(" param_list ")" "{" stmt return value "}" ";"
+              = ret_type func_name "(" param_list ")" "{" stmt return value ";" "}" 
     *)
   match tokens with
   | Lexer.DATATYPE d :: IDENTIFIER fname :: L_PAREN :: rem ->

@@ -409,7 +409,7 @@ let test_match_funcdecl1 _ =
                        vars = [ IDENT "local_var" ];
                      });
               ];
-          ret_val = VAL (NUMBER 5);
+          ret_expr = EXPR (INT 5);
         },
       _ ) ->
       ()
@@ -449,7 +449,7 @@ let test_match_funcdecl2 _ =
                        vars = [ IDENT "local_var" ];
                      });
               ];
-          ret_val = VAL (NUMBER 5);
+          ret_expr = EXPR (INT 5);
         },
       _ ) ->
       ()

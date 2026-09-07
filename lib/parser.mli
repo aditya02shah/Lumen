@@ -6,6 +6,10 @@ exception Invalid_expr
 type ident = IDENT of string
 type value = IDENTIFIER of ident | NUMBER of int | BOOLEAN of bool
 
+(* func call *)
+type arg_list = value list
+type func_call = { func_name : ident; args : arg_list }
+
 (* expression *)
 type arithmetic_op = ADD | MULTIPLY | SUBTRACT | DIVIDE | MOD | POW
 
@@ -14,6 +18,7 @@ type expr =
   | STRING of string
   | VAR of ident
   | INCREMENT of expr
+  | FUNC_CALL of func_call
   | BINARY of arithmetic_op * expr * expr
 
 (* conditional expression *)
@@ -46,25 +51,22 @@ type var_decl =
     (* declaring and assigning in same statement *)
   | DECL_ASST of { mut : bool; dtype : Lexer.dtype; asst : asst }
 
-type arg_list = value list
-type func_call = { func_name : ident; args : arg_list }
-
 (* statement *)
 type stmt =
   | VARDECL of var_decl
   | ASST of asst
   | LOOP of loop
   | EXP of expr
-  | FUNC_CALL of func_call
+  (* | FUNC_CALL of func_call *)
   | EMPTY
 
 and block = STMTS of stmt list
 and while_loop = { cond : cond_expr; body : block }
 and loop = WHILE of while_loop
 
-(* functions *)
+(* function decl *)
 type ret_type = DATATYPE of Lexer.dtype | VOID
-type ret_val = VAL of value | NONE
+type ret_expr = EXPR of expr | NONE
 type param_list = (Lexer.dtype * ident) list
 
 type func_decl = {
@@ -72,7 +74,7 @@ type func_decl = {
   return_type : ret_type;
   params : param_list;
   body : block;
-  ret_val : ret_val;
+  ret_expr : ret_expr;
 }
 
 val match_expr : Lexer.token list -> expr option * Lexer.token list
