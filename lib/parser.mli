@@ -6,21 +6,6 @@ exception Invalid_expr
 type ident = IDENT of string
 type value = IDENTIFIER of ident | NUMBER of int | BOOLEAN of bool
 
-(* func call *)
-type arg_list = value list
-type func_call = { func_name : ident; args : arg_list }
-
-(* expression *)
-type arithmetic_op = ADD | MULTIPLY | SUBTRACT | DIVIDE | MOD | POW
-
-type expr =
-  | INT of int
-  | STRING of string
-  | VAR of ident
-  | INCREMENT of expr
-  | FUNC_CALL of func_call
-  | BINARY of arithmetic_op * expr * expr
-
 (* conditional expression *)
 type logical_compare =
   | LESS_THAN
@@ -41,6 +26,22 @@ type bool_value =
 type cond_expr =
   | BOOL_VAL of bool_value
   | COMBINATION of logical_combination * bool_value * cond_expr
+
+(* func call *)
+type arg_list = expr list
+and func_call = { func_name : ident; args : arg_list }
+
+(* expression *)
+and arithmetic_op = ADD | MULTIPLY | SUBTRACT | DIVIDE | MOD | POW
+
+and expr =
+  | INT of int
+  | STRING of string
+  | VAR of ident
+  | INCREMENT of expr
+  | FUNC_CALL of func_call
+  | BINARY of arithmetic_op * expr * expr
+  | COND of cond_expr
 
 (* variables *)
 type asst = { name : ident; expr : expr }
