@@ -87,6 +87,9 @@ type func_decl = {
   body : block;
 }
 
+(* program *)
+type prog = func_decl list
+
 val match_expr : Lexer.token list -> expr option * Lexer.token list
 val format_expr : expr -> string
 val match_cond_expr : Lexer.token list -> cond_expr option * Lexer.token list
@@ -100,3 +103,4 @@ val match_loop : Lexer.token list -> loop option * Lexer.token list
 val match_block : Lexer.token list -> block option * Lexer.token list
 val match_stmt : Lexer.token list -> stmt list * Lexer.token list
 val match_func_decl : Lexer.token list -> func_decl option * Lexer.token list
+val parse_prog : Lexer.token list -> func_decl list * Lexer.token list

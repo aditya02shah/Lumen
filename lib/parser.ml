@@ -87,6 +87,9 @@ type func_decl = {
   body : block;
 }
 
+(* progam *)
+type prog = func_decl list
+
 (* helper functions *)
 let rec format_expr expr =
   match expr with
@@ -586,3 +589,16 @@ let match_func_decl (tokens : Lexer.token list) :
   | VOID :: IDENTIFIER fname :: L_PAREN :: rem ->
       match_func_decl_helper rem VOID fname false
   | _ -> (None, tokens)
+
+let parse_prog (tokens : Lexer.token list) : prog * Lexer.token list =
+  (* prog -> func_decl* *)
+  let tok = List.filter (fun tok -> tok != Lexer.WHITESPACE) tokens in
+
+  let rec loop (t : Lexer.token list) (accum : func_decl list) :
+      prog * Lexer.token list =
+    match match_func_decl t with
+    | Some fd, r -> loop r (fd :: accum)
+    | _ -> ( match accum with [] -> ([], t) | _ -> (List.rev accum, t))
+  in
+
+  loop tok []
