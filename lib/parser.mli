@@ -41,14 +41,16 @@ and expr =
 
 (* variables *)
 type asst = { name : ident; expr : expr }
+type decl = { mut : bool; dtype : Lexer.dtype; vars : ident list }
+type decl_asst = { mut : bool; dtype : Lexer.dtype; asst : asst }
 
 type var_decl =
   (* just declaring *)
-  | DECL of { mut : bool; dtype : Lexer.dtype; vars : ident list }
-    (* declaring and assigning in same statement *)
-  | DECL_ASST of { mut : bool; dtype : Lexer.dtype; asst : asst }
+  | DECL of decl (* declaring and assigning in same statement *)
+  | DECL_ASST of decl_asst
 
 (* statement *)
+type var_init = ASST of asst | DECL_ASST of decl_asst
 type ret_expr = EXPR of expr | SOME_EXPR of expr | NONE
 
 type stmt =
@@ -63,7 +65,15 @@ type stmt =
 
 and block = STMTS of stmt list
 and while_loop = { cond : cond_expr; body : block }
-and loop = WHILE of while_loop
+
+and for_loop = {
+  init : var_init;
+  cond : cond_expr;
+  update : expr;
+  body : block;
+}
+
+and loop = WHILE of while_loop | FOR of for_loop
 
 (* function decl *)
 type ret_type = DATATYPE of Lexer.dtype | VOID

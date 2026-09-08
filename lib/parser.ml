@@ -41,14 +41,16 @@ and expr =
 
 (* variables *)
 type asst = { name : ident; expr : expr }
+type decl = { mut : bool; dtype : Lexer.dtype; vars : ident list }
+type decl_asst = { mut : bool; dtype : Lexer.dtype; asst : asst }
 
 type var_decl =
   (* just declaring *)
-  | DECL of { mut : bool; dtype : Lexer.dtype; vars : ident list }
-    (* declaring and assigning in same statement *)
-  | DECL_ASST of { mut : bool; dtype : Lexer.dtype; asst : asst }
+  | DECL of decl (* declaring and assigning in same statement *)
+  | DECL_ASST of decl_asst
 
 (* statement *)
+type var_init = ASST of asst | DECL_ASST of decl_asst
 type ret_expr = EXPR of expr | SOME_EXPR of expr | NONE
 
 type stmt =
@@ -63,7 +65,15 @@ type stmt =
 
 and block = STMTS of stmt list
 and while_loop = { cond : cond_expr; body : block }
-and loop = WHILE of while_loop
+
+and for_loop = {
+  init : var_init;
+  cond : cond_expr;
+  update : expr;
+  body : block;
+}
+
+and loop = WHILE of while_loop | FOR of for_loop
 
 (* function decl *)
 type ret_type = DATATYPE of Lexer.dtype | VOID
@@ -354,12 +364,29 @@ let match_var_decl_helper (tokens : Lexer.token list) (dtype : Lexer.dtype)
   in
   loop tokens [ IDENT vname ]
 
+let match_var_decl_asst (tokens : Lexer.token list) :
+    decl_asst option * Lexer.token list =
+  (* decl_asst -> dtype asst 
+              -> mut dtype asst 
+  *)
+  (* immutable decl *)
+  match tokens with
+  | DATATYPE dtype :: rem -> (
+      match match_asst rem with
+      | Some at, r -> (Some { mut = false; dtype; asst = at }, r)
+      | _ -> (None, tokens))
+  (* mutable decl *)
+  | MUT :: DATATYPE dtype :: rem -> (
+      match match_asst rem with
+      | Some at, r -> (Some { mut = true; dtype; asst = at }, r)
+      | _ -> (None, tokens))
+  | _ -> (None, tokens)
+
 let match_var_decl (tokens : Lexer.token list) :
     var_decl option * Lexer.token list =
   (* var_decl -> dtype var_name ("," var_name)* ";"
               -> mut dtype var_name ("," var_name)* ";"
-              -> dtype asst 
-              -> mut dtype asst 
+              -> decl_asst
   *)
   match tokens with
   (* try matching var_decl -> dtype var_name ("," var_name)* ";"
@@ -374,24 +401,36 @@ let match_var_decl (tokens : Lexer.token list) :
       match_var_decl_helper (COMMA :: rem) dtype vname false
   | MUT :: DATATYPE dtype :: IDENTIFIER vname :: COMMA :: rem ->
       match_var_decl_helper (COMMA :: rem) dtype vname true
-  (* try matching var_decl -> dtype asst
-                           -> mut dtype asst  *)
-  (* immutable decl *)
-  | DATATYPE dtype :: rem -> (
-      match match_asst rem with
-      | Some at, r -> (Some (DECL_ASST { mut = false; dtype; asst = at }), r)
+  | _ -> (
+      (* try matching decl_asst *)
+      match match_var_decl_asst tokens with
+      | Some vd, r -> (Some (DECL_ASST vd), r)
       | _ -> (None, tokens))
-  (* mutable decl *)
-  | MUT :: DATATYPE dtype :: rem -> (
-      match match_asst rem with
-      | Some at, r -> (Some (DECL_ASST { mut = true; dtype; asst = at }), r)
+
+(* STATEMENT *)
+let rec for_loop_helper (tokens : Lexer.token list) (init : var_init) :
+    loop option * Lexer.token list =
+  (* helps match  cond_expr ";" update_expr ")" block *)
+
+  (* try to match cond_expr ";" *)
+  match match_cond_expr tokens with
+  | Some cond, SEMICOLON :: rem -> (
+      (* try to match update_expr ")" *)
+      match match_expr rem with
+      | Some update, R_PAREN :: r -> (
+          (* try to match block *)
+          match match_block r with
+          | Some body, rtok -> (Some (FOR { init; cond; update; body }), rtok)
+          | _ -> (None, tokens))
       | _ -> (None, tokens))
   | _ -> (None, tokens)
 
-(* STATEMENT *)
-let rec match_loop (tokens : Lexer.token list) : loop option * Lexer.token list
-    =
-  (* loop -> while cond block *)
+and match_loop (tokens : Lexer.token list) : loop option * Lexer.token list =
+  (* loop -> while cond block 
+          -> for "(" var_init  cond_expr ";" update_expr ")" block
+
+    var_init = asst | decl_asst 
+  *)
   match tokens with
   (* try to match while *)
   | WHILE :: rem_tokens -> (
@@ -405,6 +444,15 @@ let rec match_loop (tokens : Lexer.token list) : loop option * Lexer.token list
               (Some (WHILE loop), r)
           | _ -> (None, tokens))
       | _ -> (None, tokens))
+  (* try to match for *)
+  | FOR :: L_PAREN :: rem_tokens -> (
+      (* try to match var_init *)
+      match match_asst rem_tokens with
+      | Some at, rem -> for_loop_helper rem (ASST at)
+      | _ -> (
+          match match_var_decl_asst rem_tokens with
+          | Some dcl, r -> for_loop_helper r (DECL_ASST dcl)
+          | _ -> (None, tokens)))
   | _ -> (None, tokens)
 
 and match_block (tokens : Lexer.token list) : block option * Lexer.token list =
