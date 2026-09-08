@@ -17,15 +17,11 @@ type logical_compare =
 
 type logical_combination = LOGICAL_AND | LOGICAL_OR
 
-type bool_value =
-  | BOOL of bool
-  | NOT of bool
-  | VAL_CMP of logical_compare * value * value
-  | BOOL_CMP of logical_combination * bool * bool
+type bool_value = BOOL of bool | VAL_CMP of logical_compare * value * value
 
-type cond_expr =
+and cond_expr =
   | BOOL_VAL of bool_value
-  | COMBINATION of logical_combination * bool_value * cond_expr
+  | COMBINATION of logical_combination * cond_expr * cond_expr
 
 (* func call *)
 type arg_list = expr list

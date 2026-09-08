@@ -17,15 +17,11 @@ type logical_compare =
 
 type logical_combination = LOGICAL_AND | LOGICAL_OR
 
-type bool_value =
-  | BOOL of bool
-  | NOT of bool
-  | VAL_CMP of logical_compare * value * value
-  | BOOL_CMP of logical_combination * bool * bool
+type bool_value = BOOL of bool | VAL_CMP of logical_compare * value * value
 
-type cond_expr =
+and cond_expr =
   | BOOL_VAL of bool_value
-  | COMBINATION of logical_combination * bool_value * cond_expr
+  | COMBINATION of logical_combination * cond_expr * cond_expr
 
 (* func call *)
 type arg_list = expr list
@@ -147,85 +143,75 @@ let match_param_list (tokens : Lexer.token list) : param_list * Lexer.token list
 
 (* CONDITIONAL EXPRESSION *)
 let match_valcmp (tokens : Lexer.token list) :
-    bool_value option * Lexer.token list =
-  (* valcmp -> "(" val logical_compare val ")"*)
-  match tokens with
-  (* try to match "(" *)
-  | L_PAREN :: rem_tokens -> (
-      (* try to match val (operand1) *)
-      match match_value rem_tokens with
-      | Some op1, tok :: rem -> (
-          (* try to match logical_compare operator *)
-          let res =
-            match tok with
-            | LESS_THAN -> Some LESS_THAN
-            | LESS_THAN_EQUALS -> Some LESS_THAN_EQUALS
-            | GREATER_THAN -> Some GREATER_THAN
-            | GREATER_THAN_EQUALS -> Some GREATER_THAN_EQUALS
-            | EQUALS -> Some EQUALS
-            | NOT_EQUALS -> Some NOT_EQUALS
-            | _ -> None
-          in
-          match res with
-          | Some op -> (
-              (* try to match val (operand2) *)
-              match match_value rem with
-              | Some op2, R_PAREN :: r -> (Some (VAL_CMP (op, op1, op2)), r)
-              | _ -> (None, tokens))
-          | None -> (None, tokens))
-      | _ -> (None, tokens))
+    cond_expr option * Lexer.token list =
+  (* valcmp -> val logical_compare val *)
+
+  (* try to match val (operand1)*)
+  match match_value tokens with
+  | Some op1, tok :: rem -> (
+      (* try to match logical_compare operator *)
+      let res =
+        match tok with
+        | LESS_THAN -> Some LESS_THAN
+        | LESS_THAN_EQUALS -> Some LESS_THAN_EQUALS
+        | GREATER_THAN -> Some GREATER_THAN
+        | GREATER_THAN_EQUALS -> Some GREATER_THAN_EQUALS
+        | EQUALS -> Some EQUALS
+        | NOT_EQUALS -> Some NOT_EQUALS
+        | _ -> None
+      in
+      match res with
+      | Some op -> (
+          (* try to match val (operand2) *)
+          match match_value rem with
+          | Some op2, r -> (Some (BOOL_VAL (VAL_CMP (op, op1, op2))), r)
+          | _ -> (None, tokens))
+      | None -> (None, tokens))
   | _ -> (None, tokens)
 
-let match_boolcmp (tokens : Lexer.token list) :
-    bool_value option * Lexer.token list =
-  (* boolcmp -> "(" bool logical_combination bool ")"*)
-  match tokens with
-  | L_PAREN :: BOOLEAN op1 :: LOGICAL_AND :: BOOLEAN op2 :: R_PAREN :: r ->
-      (Some (BOOL_CMP (LOGICAL_AND, op1, op2)), r)
-  | L_PAREN :: BOOLEAN op1 :: LOGICAL_OR :: BOOLEAN op2 :: R_PAREN :: r ->
-      (Some (BOOL_CMP (LOGICAL_OR, op1, op2)), r)
-  | _ -> (None, tokens)
-
-let match_boolval (tokens : Lexer.token list) :
-    bool_value option * Lexer.token list =
+let rec match_boolval (tokens : Lexer.token list) :
+    cond_expr option * Lexer.token list =
   (* 
   boolval = bool
-          = not bool
-          = boolcmp
-          = valcmp
+          = val logical_compare val  
+          = "(" cond_expr ")"
   *)
   match tokens with
   | [] -> (None, tokens)
-  | BOOLEAN b :: rem_tokens ->
-      (Some (BOOL b), rem_tokens) (* try to match bool *)
-  | NOT :: BOOLEAN b :: rem_tokens ->
-      (Some (NOT b), rem_tokens) (* try to match "not" bool *)
-  | token :: rem_tokens ->
-      (* try to match valcmp and valcmp *)
-      continue tokens match_valcmp match_boolcmp
+  (* try to match bool *)
+  | BOOLEAN b :: rem -> (Some (BOOL_VAL (BOOL b)), rem)
+  (* try to "(" cond_expr ")" *)
+  | L_PAREN :: rem -> (
+      match match_cond_expr rem with
+      | Some ce, R_PAREN :: r -> (Some ce, r)
+      | _ -> (None, tokens))
+  (* try to match val logical_compare val *)
+  | token :: rem -> match_valcmp tokens
 
-let rec match_cond_expr (tokens : Lexer.token list) :
+and match_cond_expr (tokens : Lexer.token list) :
     cond_expr option * Lexer.token list =
-  (* 
-  condexpr -> boolval
-           -> boolval (logical_combination condexpr)
-  *)
+  (* cond_expr -> boolval (logical_combination boolval)* *)
 
   (* try to match boolval *)
   match match_boolval tokens with
-  (* | Some v, [] -> (Some (BOOL_VAL v), []) *)
-  (* try to match boolval (logical_combination condexpr) *)
-  | Some v, LOGICAL_AND :: r -> (
-      (* try to match condexpr *)
-      match match_cond_expr r with
-      | Some c, rem -> (Some (COMBINATION (LOGICAL_AND, v, c)), rem)
-      | _ -> (Some (BOOL_VAL v), LOGICAL_AND :: r))
-  | Some v, LOGICAL_OR :: r -> (
-      (* try to match condexpr *)
-      match match_cond_expr r with
-      | Some c, rem -> (Some (COMBINATION (LOGICAL_OR, v, c)), rem)
-      | _ -> (Some (BOOL_VAL v), LOGICAL_OR :: r))
-  | Some v, r -> (Some (BOOL_VAL v), r)
+  | Some bv, rem_tokens ->
+      (* try to match all (logical_combination boolval) pairs *)
+      let rec loop (t : Lexer.token list) (prev : cond_expr) :
+          cond_expr option * Lexer.token list =
+        match t with
+        (* found operator *)
+        | LOGICAL_AND :: r -> (
+            match match_boolval r with
+            | Some bv, rem -> loop rem (COMBINATION (LOGICAL_AND, prev, bv))
+            | _ -> (None, t))
+        | LOGICAL_OR :: r -> (
+            match match_boolval r with
+            | Some bv, rem -> loop rem (COMBINATION (LOGICAL_OR, prev, bv))
+            | _ -> (None, t))
+        (* no operator found; return cond_expr found so far *)
+        | _ -> (Some prev, t)
+      in
+      loop rem_tokens bv
   | _ -> (None, tokens)
 
 (* EXPRESSION *)
