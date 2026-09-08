@@ -129,7 +129,7 @@ let test_match_arglist_empty _ =
   | Some _, _ -> ()
   | None, _ -> assert_failure "not found arglist (empty)"
 
-(* FUNC CALL*)
+(* FUNC CALL *)
 let funcall_tokens_empty =
   [ Lexer.IDENTIFIER "main"; Lexer.L_PAREN; Lexer.R_PAREN; Lexer.SEMICOLON ]
 
@@ -184,72 +184,68 @@ let test_match_paramList_empty _ =
   assert_equal [] x
 
 (* CONDITIONAL EXPRESSIONS *)
-(* (true || true) && (false || false) *)
-let cond_tokens =
-  [
-    Lexer.L_PAREN;
-    Lexer.BOOLEAN true;
-    Lexer.LOGICAL_OR;
-    Lexer.BOOLEAN true;
-    Lexer.R_PAREN;
-    Lexer.LOGICAL_AND;
-    Lexer.L_PAREN;
-    Lexer.BOOLEAN false;
-    Lexer.LOGICAL_OR;
-    Lexer.BOOLEAN false;
-    Lexer.R_PAREN;
-  ]
+
+(* x > 5 *)
+let bool_tokens = [ Lexer.IDENTIFIER "x"; Lexer.GREATER_THAN; Lexer.NUMBER 5 ]
+
+let expected_cond1 =
+  BOOL_VAL (VAL_CMP (GREATER_THAN, IDENTIFIER (IDENT "x"), NUMBER 5))
 
 let test_match_condexpr1 _ =
-  match match_cond_expr cond_tokens with
-  | Some x, _ ->
-      assert_equal
-        (COMBINATION
-           ( LOGICAL_AND,
-             BOOL_CMP (LOGICAL_OR, true, true),
-             BOOL_VAL (BOOL_CMP (LOGICAL_OR, false, false)) ))
-        x
+  match match_cond_expr bool_tokens with
+  | Some x, _ -> assert_equal expected_cond1 x
   | None, _ -> assert_failure "not found cond (1)"
 
-(* (i1 > i2) && (i3 == i4) *)
-let cond_tokens2 =
+(* (x > 5) *)
+let bool_tokens2 =
   [
     Lexer.L_PAREN;
-    Lexer.IDENTIFIER "i1";
+    Lexer.IDENTIFIER "x";
     Lexer.GREATER_THAN;
-    Lexer.IDENTIFIER "i2";
-    Lexer.R_PAREN;
-    Lexer.LOGICAL_AND;
-    Lexer.L_PAREN;
-    Lexer.IDENTIFIER "i3";
-    Lexer.EQUALS;
-    Lexer.IDENTIFIER "i4";
+    Lexer.NUMBER 5;
     Lexer.R_PAREN;
   ]
 
+let expected_cond2 =
+  BOOL_VAL (VAL_CMP (GREATER_THAN, IDENTIFIER (IDENT "x"), NUMBER 5))
+
 let test_match_condexpr2 _ =
-  match match_cond_expr cond_tokens2 with
-  | Some x, _ ->
-      assert_equal
-        (COMBINATION
-           ( LOGICAL_AND,
-             VAL_CMP
-               (GREATER_THAN, IDENTIFIER (IDENT "i1"), IDENTIFIER (IDENT "i2")),
-             BOOL_VAL
-               (VAL_CMP
-                  (EQUALS, IDENTIFIER (IDENT "i3"), IDENTIFIER (IDENT "i4"))) ))
-        x
+  match match_cond_expr bool_tokens2 with
+  | Some x, _ -> assert_equal expected_cond2 x
   | None, _ -> assert_failure "not found cond (2)"
 
-(* !false *)
-let cond_tokens3 = [ Lexer.NOT; Lexer.BOOLEAN false ]
+(* 10 > x && 25 > 45 && 65 > 75 *)
+let bool_tokens3 =
+  [
+    Lexer.NUMBER 10;
+    Lexer.GREATER_THAN;
+    Lexer.IDENTIFIER "x";
+    Lexer.LOGICAL_AND;
+    Lexer.NUMBER 25;
+    Lexer.GREATER_THAN;
+    Lexer.NUMBER 45;
+    Lexer.LOGICAL_AND;
+    Lexer.NUMBER 65;
+    Lexer.GREATER_THAN;
+    Lexer.NUMBER 75;
+  ]
+
+let expected_cond3 =
+  COMBINATION
+    ( LOGICAL_AND,
+      COMBINATION
+        ( LOGICAL_AND,
+          BOOL_VAL (VAL_CMP (GREATER_THAN, NUMBER 10, IDENTIFIER (IDENT "x"))),
+          BOOL_VAL (VAL_CMP (GREATER_THAN, NUMBER 25, NUMBER 45)) ),
+      BOOL_VAL (VAL_CMP (GREATER_THAN, NUMBER 65, NUMBER 75)) )
 
 let test_match_condexpr3 _ =
-  match match_cond_expr cond_tokens3 with
-  | Some x, _ -> assert_equal (BOOL_VAL (NOT false)) x
+  match match_cond_expr bool_tokens3 with
+  | Some x, _ -> assert_equal expected_cond3 x
   | None, _ -> assert_failure "not found cond (3)"
 
 (* STATEMENTS *)
+
 (* i1 = 5; *)
 let stmt_tokens =
   [ Lexer.IDENTIFIER "i1"; Lexer.ASSIGNMENT; Lexer.NUMBER 5; Lexer.SEMICOLON ]
@@ -353,7 +349,7 @@ let test_match_block _ =
       ()
   | _ -> assert_failure "unexpected block"
 
-(* x = y + 5; -- placeholder, existence-only until expr's identifier case is confirmed *)
+(* x = y + 5; *)
 let stmt_tokens4 =
   [
     Lexer.IDENTIFIER "x";
@@ -366,10 +362,13 @@ let stmt_tokens4 =
 
 let test_match_stmt4 _ =
   match match_stmt stmt_tokens4 with
-  | [ _ ], [] -> ()
+  | ( [ ASST { name = IDENT "x"; expr = BINARY (ADD, VAR (IDENT "y"), INT 5) } ],
+      [] ) ->
+      ()
   | _ -> assert_failure "unexpected stmt (4)"
 
 (* FUNCTION DECLARATION *)
+
 let funcdecl_tokens1 =
   [
     Lexer.DATATYPE INT;
@@ -397,6 +396,7 @@ let test_match_funcdecl1 _ =
         {
           func_name = IDENT "main";
           return_type = DATATYPE Lexer.INT;
+          is_optional_type = false;
           params = [ (Lexer.INT, IDENT "p1"); (Lexer.BOOL, IDENT "p2") ];
           body =
             STMTS
@@ -437,6 +437,7 @@ let test_match_funcdecl2 _ =
         {
           func_name = IDENT "main";
           return_type = DATATYPE Lexer.INT;
+          is_optional_type = false;
           params = [];
           body =
             STMTS
@@ -469,9 +470,9 @@ let suite =
          "match_funcall with args" >:: test_match_funcall_args;
          "match_paramList" >:: test_match_paramList;
          "match_paramList empty" >:: test_match_paramList_empty;
-         "match_condexpr 1 (bool combo)" >:: test_match_condexpr1;
-         "match_condexpr 2 (comparisons)" >:: test_match_condexpr2;
-         "match_condexpr 3 (not)" >:: test_match_condexpr3;
+         "match_condexpr 1 (comparison)" >:: test_match_condexpr1;
+         "match_condexpr 2 (parenthesized comparison)" >:: test_match_condexpr2;
+         "match_condexpr 3 (logical combination)" >:: test_match_condexpr3;
          "match_stmt: assignment" >:: test_match_stmt1;
          "match_stmt: vardecl (multi)" >:: test_match_stmt2;
          "match_stmt: while loop" >:: test_match_stmt3;
