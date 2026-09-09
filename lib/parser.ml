@@ -28,7 +28,7 @@ and expr =
   | INT of int
   | STRING of string
   | VAR of ident
-  | INCREMENT of expr
+  | INCREMENT of ident
   | FUNC_CALL of func_call
   | BINARY of arithmetic_op * expr * expr
   | COND of cond_expr
@@ -105,7 +105,7 @@ let rec format_expr expr =
   match expr with
   | INT n -> Printf.sprintf "INT(%d)" n
   | STRING s -> Printf.sprintf "STRING(%S)" s
-  | INCREMENT e -> Printf.sprintf "INCREMENT(%s)" (format_expr e)
+  | INCREMENT (IDENT i) -> Printf.sprintf "INCREMENT IDENT(%s)" i
   | VAR (IDENT i) -> Printf.sprintf "IDENT(%s)" i
   | FUNC_CALL fc -> "FUNCCALL"
   | COND cd -> "CE"
@@ -267,7 +267,7 @@ and match_factor (tokens : Lexer.token list) : expr option * Lexer.token list =
   (* factor -> Identifier | Number | Identifier++ | func_call | "(" expr ")" *)
   match tokens with
   (* try to match identifier++ *)
-  | IDENTIFIER i :: INCREMENT :: rem -> (Some (INCREMENT (VAR (IDENT i))), rem)
+  | IDENTIFIER i :: INCREMENT :: rem -> (Some (INCREMENT (IDENT i)), rem)
   (* try to match func_call *)
   | IDENTIFIER i :: L_PAREN :: r -> (
       match match_func_call tokens with

@@ -28,7 +28,7 @@ and expr =
   | INT of int
   | STRING of string
   | VAR of ident
-  | INCREMENT of expr
+  | INCREMENT of ident
   | FUNC_CALL of func_call
   | BINARY of arithmetic_op * expr * expr
   | COND of cond_expr
