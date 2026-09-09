@@ -2,34 +2,28 @@ exception Invalid_expr
 
 (* TYPES *)
 
-(* basic values *)
+(* Basic Units *)
 type ident = IDENT of string
+
 type value = IDENTIFIER of ident | NUMBER of int | BOOLEAN of bool
 
-(* conditional expression *)
-type logical_compare =
-  | LESS_THAN
-  | LESS_THAN_EQUALS
-  | GREATER_THAN
-  | GREATER_THAN_EQUALS
-  | EQUALS
-  | NOT_EQUALS
+(* Variables *)
 
-type logical_combination = LOGICAL_AND | LOGICAL_OR
+(* variable declaration *)
+and decl = { mut : bool; dtype : Lexer.dtype; vars : ident list }
 
-type bool_value = BOOL of bool | VAL_CMP of logical_compare * value * value
+(* variable assignment *)
+type asst = { name : ident; expr : expr }
+and decl_asst = { mut : bool; dtype : Lexer.dtype; asst : asst }
 
-and cond_expr =
-  | BOOL_VAL of bool_value
-  | COMBINATION of logical_combination * cond_expr * cond_expr
+and var_decl =
+  | DECL of decl (* declaration only *)
+  | DECL_ASST of decl_asst (* declaration and assignment in same statement *)
 
-(* func call *)
-type arg_list = expr list
-and func_call = { func_name : ident; args : arg_list }
+(* variable initialisation *)
+and var_init = ASST of asst | DECL_ASST of decl_asst
 
-(* expression *)
-and arithmetic_op = ADD | MULTIPLY | SUBTRACT | DIVIDE | MOD | POW
-
+(* Expression *)
 and expr =
   | INT of int
   | STRING of string
@@ -39,45 +33,33 @@ and expr =
   | BINARY of arithmetic_op * expr * expr
   | COND of cond_expr
 
-(* variables *)
-type asst = { name : ident; expr : expr }
-type decl = { mut : bool; dtype : Lexer.dtype; vars : ident list }
-type decl_asst = { mut : bool; dtype : Lexer.dtype; asst : asst }
+(* conditional expression *)
+and logical_compare =
+  | LESS_THAN
+  | LESS_THAN_EQUALS
+  | GREATER_THAN
+  | GREATER_THAN_EQUALS
+  | EQUALS
+  | NOT_EQUALS
 
-type var_decl =
-  (* just declaring *)
-  | DECL of decl (* declaring and assigning in same statement *)
-  | DECL_ASST of decl_asst
+and bool_value = BOOL of bool | VAL_CMP of logical_compare * value * value
+and arithmetic_op = ADD | MULTIPLY | SUBTRACT | DIVIDE | MOD | POW
+and logical_combination = LOGICAL_AND | LOGICAL_OR
 
-(* statement *)
-type var_init = ASST of asst | DECL_ASST of decl_asst
-type ret_expr = EXPR of expr | SOME_EXPR of expr | NONE
+and cond_expr =
+  | BOOL_VAL of bool_value
+  | COMBINATION of logical_combination * cond_expr * cond_expr
 
-type stmt =
-  | VARDECL of var_decl
-  | ASST of asst
-  | LOOP of loop
-  | IF of block
-  | IF_ELSE of block * block
-  | RETURN of ret_expr
-  | EXP of expr
-  | EMPTY
+(* Functions *)
 
-and block = STMTS of stmt list
-and while_loop = { cond : cond_expr; body : block }
+(* function declaration *)
+and ret_type = DATATYPE of Lexer.dtype | VOID
+and param_list = (Lexer.dtype * ident) list
+and ret_expr = EXPR of expr | SOME_EXPR of expr | NONE
 
-and for_loop = {
-  init : var_init;
-  cond : cond_expr;
-  update : expr;
-  body : block;
-}
-
-and loop = WHILE of while_loop | FOR of for_loop
-
-(* function decl *)
-type ret_type = DATATYPE of Lexer.dtype | VOID
-type param_list = (Lexer.dtype * ident) list
+(* function call *)
+and arg_list = expr list
+and func_call = { func_name : ident; args : arg_list }
 
 type func_decl = {
   func_name : ident;
@@ -87,7 +69,35 @@ type func_decl = {
   body : block;
 }
 
-(* program *)
+(* Statement *)
+and stmt =
+  | VARDECL of var_decl
+  | ASST of asst
+  | LOOP of loop
+  | IF of block
+  | IF_ELSE of block * block
+  | RETURN of ret_expr
+  | EXP of expr
+  | EMPTY
+
+(* Block *)
+and block = STMTS of stmt list
+
+(* Loops *)
+and loop = WHILE of while_loop | FOR of for_loop
+
+(* while loop *)
+and while_loop = { cond : cond_expr; body : block }
+
+(* for loop *)
+and for_loop = {
+  init : var_init;
+  cond : cond_expr;
+  update : expr;
+  body : block;
+}
+
+(* Program *)
 type prog = func_decl list
 
 val match_expr : Lexer.token list -> expr option * Lexer.token list
