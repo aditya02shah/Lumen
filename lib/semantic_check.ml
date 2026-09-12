@@ -10,10 +10,8 @@ type func_details = {
 
 let var_env = Hashtbl.create 100 (* maps var -> var_details *)
 let func_env = Hashtbl.create 100 (* maps func -> func_details *)
-let check_func_call (asst : Parser.func_call) : semantic_errors = []
 
-(* check if function defined *)
-(* check if arglist matches paramlist & no of args matches paramlist *)
+(* and func_call = { func_name : ident; args : arg_list } *)
 
 let rec check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
   match cond_expr with
@@ -148,6 +146,53 @@ let rec check_expr (expr : Parser.expr) : semantic_errors =
       | _ -> check_expr exp1 @ check_expr exp2)
   | _ -> []
 
+and check_func_call (func_call : Parser.func_call) : semantic_errors =
+  (* check if function has been defined *)
+  match Hashtbl.find_opt func_env func_call.func_name with
+  | Some ent -> (
+      (* condition: check each expression in list of arguments *)
+      let errs =
+        List.fold_left (fun acc exp -> acc @ check_expr exp) [] func_call.args
+      in
+      match errs with
+      (* compare parameters & arguments *)
+      | [] -> compare_params_and_args ent.params func_call.args
+      | errors -> errors)
+  | None -> [ "Call to undefined function!" ]
+
+and compare_params_and_args (params : Parser.param_list)
+    (args : Parser.arg_list) : semantic_errors =
+  (* helper function which compares parameters & arguments *)
+  (* Note: each argument should already be checked *)
+  match (params, args) with
+  | (param_type, _) :: rem_param, arg :: rem_args -> (
+      (* condition: argument type must match parameter type *)
+      match (param_type, get_expr_type arg) with
+      | INT, Some INT -> []
+      | BOOL, Some BOOL -> []
+      | _, _ -> [ "Argument type doesn't match parameter type!" ])
+  | [], [] -> []
+  (* condition: argument count must match parameter count *)
+  | _ -> [ "Argument count must match parameter count in function call!" ]
+
+and get_expr_type (expr : Parser.expr) : Lexer.dtype option =
+  (* NOTE: assumes expr has already been checked *)
+  match expr with
+  | INT _ -> Some INT
+  | VAR v -> (
+      match Hashtbl.find_opt var_env v with
+      | Some ent -> Some ent.dtype
+      | None -> None)
+  | INCREMENT x -> Some INT
+  | FUNC_CALL f -> (
+      match Hashtbl.find_opt func_env f.func_name with
+      | Some ent -> (
+          match ent.ret_type with DATATYPE d -> Some d | VOID -> None)
+      | None -> None)
+  | BINARY (_, _, _) -> Some INT
+  | COND _ -> Some BOOL
+  | _ -> Some INT
+
 let check_asst (asst : Parser.asst) : semantic_errors =
   (* condition: check if var is defined *)
   match Hashtbl.find_opt var_env asst.name with
@@ -248,24 +293,6 @@ and check_block (block : Parser.block) : semantic_errors =
 let check_ret_expr (ret_expr : Parser.ret_expr) : semantic_errors =
   match ret_expr with EXPR e | SOME_EXPR e -> check_expr e | NONE -> []
 
-let get_expr_type (expr : Parser.expr) : Lexer.dtype option =
-  (* NOTE: assumes expr has already been checked *)
-  match expr with
-  | INT _ -> Some INT
-  | VAR v -> (
-      match Hashtbl.find_opt var_env v with
-      | Some ent -> Some ent.dtype
-      | None -> None)
-  | INCREMENT x -> Some INT
-  | FUNC_CALL f -> (
-      match Hashtbl.find_opt func_env f.func_name with
-      | Some ent -> (
-          match ent.ret_type with DATATYPE d -> Some d | VOID -> None)
-      | None -> None)
-  | BINARY (_, _, _) -> Some INT
-  | COND _ -> Some BOOL
-  | _ -> Some INT
-
 let get_ret_expr_in_blk (func_blk : Parser.block) : Parser.ret_expr list =
   (* returns all the return expressions present in a block *)
   (* Note: excludes return expression sub-blocks *)
@@ -358,4 +385,7 @@ let rec check_prog (program : Parser.prog) : semantic_errors =
   (* check all the functions in the program *)
   match program with
   | [] -> []
-  | func :: rem_funcs -> check_func func @ check_prog rem_funcs
+  | func :: rem_funcs ->
+      List.fold_left
+        (fun acc fn_decl -> acc @ check_func_decl fn_decl)
+        [] (func :: rem_funcs)
