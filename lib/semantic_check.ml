@@ -11,8 +11,6 @@ type func_details = {
 let var_env = Hashtbl.create 100 (* maps var -> var_details *)
 let func_env = Hashtbl.create 100 (* maps func -> func_details *)
 
-(* and func_call = { func_name : ident; args : arg_list } *)
-
 let rec check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
   match cond_expr with
   | BOOL_VAL (VAL_CMP (op, val1, val2)) -> (
@@ -33,13 +31,11 @@ let rec check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
                   | _ ->
                       [
                         "Conditional Expression: comparison requires integer \
-                         operands";
+                         operands!";
                       ]))
           | _ -> [ "Conditional Expression: comparing undefined variable!" ])
       | IDENTIFIER var1, IDENTIFIER var2 -> (
           (* condition: both variables should be defined and assigned a value *)
-
-          (* check whether the variables have been defined *)
           match
             (Hashtbl.find_opt var_env var1, Hashtbl.find_opt var_env var2)
           with
@@ -59,7 +55,7 @@ let rec check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
               | _ ->
                   [ "Conditional Expression: comparing unassigned variables!" ])
           | _ -> [ "Conditional Expression: comparing undefined variables!" ])
-      | _ -> [ "Conditional Expression: comparing undefined variables" ])
+      | _ -> [ "Conditional Expression: comparing undefined variables!" ])
   | COMBINATION (cm, ce1, ce2) -> check_cond_expr ce1 @ check_cond_expr ce2
   | _ -> []
 
@@ -133,7 +129,7 @@ let rec check_expr (expr : Parser.expr) : semantic_errors =
                   | INT -> check_expr e
                   | _ ->
                       "Expression: arithmetic expressions requires integer \
-                       operands" :: check_expr e)
+                       operands!" :: check_expr e)
               | NONE ->
                   "Expression: contains unassigned variables!" :: check_expr e)
           | _ -> "Expression: contains undefined variable!" :: check_expr e)
@@ -148,7 +144,7 @@ let rec check_expr (expr : Parser.expr) : semantic_errors =
               | DATATYPE INT -> []
               | _ ->
                   "Expression: non-integer functions cannot be used in \
-                   arithmetic expressions" :: check_expr e)
+                   arithmetic expressions!" :: check_expr e)
           | _ -> "Undefined function used in expression! " :: check_expr e)
       | COND ce, _ | _, COND ce ->
           [
@@ -210,51 +206,27 @@ and get_expr_type (expr : Parser.expr) : Lexer.dtype option =
   | BINARY (_, _, _) -> Some INT
   | COND _ -> Some BOOL
 
-let check_asst (asst : Parser.asst) : semantic_errors =
+let check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
   (* condition: check if var is defined *)
   match Hashtbl.find_opt var_env asst.name with
-  | Some ent -> (
-      (* condition: check if var is mutable *)
-      match ent.mut with
-      | true -> (
-          (* check expr being assigned *)
-          match check_expr asst.expr with
-          | [] -> (
-              match (ent.dtype, asst.expr) with
-              | INT, INT _ -> []
-              | INT, INCREMENT v -> []
-              | BOOL, COND ce -> []
-              | INT, BINARY (op, exp1, exp2) -> []
-              | _, VAR v -> (
-                  (* condition: variable types should match *)
-                  match Hashtbl.find_opt var_env v with
-                  | Some varent -> (
-                      match (ent.dtype, varent.dtype) with
-                      | INT, INT -> []
-                      | BOOL, BOOL -> []
-                      | _, _ ->
-                          [
-                            "Assignment: cannot assign to variable of \
-                             different type!";
-                          ])
-                  | None -> [])
-              | _, FUNC_CALL f -> (
-                  (* condition: variable type and function type should match *)
-                  match Hashtbl.find_opt func_env f.func_name with
-                  | Some fent -> (
-                      match (ent.dtype, fent.ret_type) with
-                      | INT, DATATYPE INT -> []
-                      | BOOL, DATATYPE BOOL -> []
-                      | _, _ ->
-                          [
-                            "Assignment: cannot assign variable using function \
-                             of different type!";
-                          ])
-                  | None -> [])
-              | _ -> [ "Assignment: contains invalid expression!" ])
-          | errs -> "Assignment: contains invalid expression!" :: errs)
-      | false -> [ "Assignment: cannot assign value to immutable variable" ])
-  | _ -> [ "Assignment: contains undefined variable" ]
+  | Some ent ->
+      if
+        (* condition: check if var is mutable *)
+        is_decl_asst = true || ent.mut = true
+      then
+        (* check expr being assigned *)
+        match check_expr asst.expr with
+        | [] -> (
+            match (ent.dtype, get_expr_type asst.expr) with
+            | INT, Some INT -> []
+            | BOOL, Some BOOL -> []
+            | _ ->
+                [
+                  "Assignment: variable type and expression type do not match!";
+                ])
+        | errs -> "Assignment: contains invalid expression!" :: errs
+      else [ "Assignment: cannot assign value to immutable variable!" ]
+  | _ -> [ "Assignment: contains undefined variable!" ]
 
 let check_decl_asst (decl_asst : Parser.decl_asst) : semantic_errors =
   (* store declaration *)
@@ -265,7 +237,7 @@ let check_decl_asst (decl_asst : Parser.decl_asst) : semantic_errors =
       assigned_val = EXPR decl_asst.asst.expr;
     };
   (* check asst *)
-  check_asst decl_asst.asst
+  check_asst decl_asst.asst true
 
 let check_var_decl (var_decl : Parser.var_decl) : semantic_errors =
   match var_decl with
@@ -288,7 +260,7 @@ let rec check_loop (loop : Parser.loop) : semantic_errors =
   | FOR for_lp ->
       let init =
         match for_lp.init with
-        | ASST at -> check_asst at
+        | ASST at -> check_asst at false
         | DECL_ASST da -> check_decl_asst da
       in
       init
@@ -299,7 +271,7 @@ and check_stmt (stmt : Parser.stmt) : semantic_errors =
   (* check stmt *)
   match stmt with
   | VARDECL vd -> check_var_decl vd
-  | ASST at -> check_asst at
+  | ASST at -> check_asst at false
   | LOOP lp -> check_loop lp
   | IF blk -> check_block blk
   | IF_ELSE (if_blk, else_blk) -> check_block if_blk @ check_block else_blk
@@ -395,7 +367,8 @@ let check_func_decl (func : Parser.func_decl) : semantic_errors =
                       | _ ->
                           [
                             "Function: cannot use optional type return \
-                             expressions in non-optional function declarations";
+                             expressions in non-optional function \
+                             declarations!";
                           ])
                   | errs -> errs)
               | _ ->

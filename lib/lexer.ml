@@ -164,6 +164,16 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
           match match_characters rest (string_to_char_list "one") with
           | Some remaining -> (Some NONE, remaining)
           | None -> get_token rest (Accum ([ c ], CHAR)))
+      | 't' -> (
+          (* "true" *)
+          match match_characters rest (string_to_char_list "rue") with
+          | Some remaining -> (Some (BOOLEAN true), remaining)
+          | None -> get_token rest (Accum ([ c ], CHAR)))
+      | 'f' -> (
+          (* "false" *)
+          match match_characters rest (string_to_char_list "alse") with
+          | Some remaining -> (Some (BOOLEAN true), remaining)
+          | None -> get_token rest (Accum ([ c ], CHAR)))
       (* words *)
       | 'a' .. 'z' | 'A' .. 'Z' -> get_token rest (Accum ([ c ], CHAR))
       (* numbers *)
@@ -228,7 +238,6 @@ let rec tokenize_helper (accum : token list) (prog : string list) : token list =
       | "Option" -> tokenize_helper (OPTION :: accum) rest
       | "Some" -> tokenize_helper (SOME :: accum) rest
       | "None" -> tokenize_helper (NONE :: accum) rest
-      (* | _ -> raise Unknown_token) *)
       (* operations *)
       | "==" -> tokenize_helper (EQUALS :: accum) rest
       | "!=" -> tokenize_helper (NOT_EQUALS :: accum) rest
