@@ -14,17 +14,6 @@ let check_func_call (asst : Parser.func_call) : semantic_errors = []
 (* check if function defined *)
 (* check if arglist matches paramlist & no of args matches paramlist *)
 
-let check_var_init (var_init : Parser.var_init) : semantic_errors = []
-(* check asst *)
-
-let check_var_decl (var_decl : Parser.var_decl) : semantic_errors = []
-
-(* check decl_asst. Declared type should match assigned type, and var should be mutable *)
-let check_asst (asst : Parser.asst) : semantic_errors = []
-
-(* check if var being assigned to mutable *)
-let check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors = []
-
 let rec check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
   match cond_expr with
   | BOOL_VAL (VAL_CMP (op, val1, val2)) -> (
@@ -198,6 +187,17 @@ let check_asst (asst : Parser.asst) : semantic_errors =
       | false -> [ "Cannot assigned to immutable variable" ])
   | _ -> [ "Cannot assigned to undefined variable" ]
 
+let check_decl_asst (decl_asst : Parser.decl_asst) : semantic_errors =
+  (* store declaration *)
+  Hashtbl.replace var_env decl_asst.asst.name
+    {
+      mut = decl_asst.mut;
+      dtype = decl_asst.dtype;
+      assigned_val = EXPR decl_asst.asst.expr;
+    };
+  (* check asst *)
+  check_asst decl_asst.asst
+
 let check_var_decl (var_decl : Parser.var_decl) : semantic_errors =
   match var_decl with
   | DECL d ->
@@ -209,21 +209,40 @@ let check_var_decl (var_decl : Parser.var_decl) : semantic_errors =
             { mut = decl_mut; dtype = decl_type; assigned_val = NONE })
         d.vars;
       [] (* return [] since no errors found *)
-  | DECL_ASST da ->
-      (* store declaration *)
-      Hashtbl.replace var_env da.asst.name
-        { mut = da.mut; dtype = da.dtype; assigned_val = EXPR da.asst.expr };
-      (* check asst *)
-      check_asst da.asst
+  | DECL_ASST da -> check_decl_asst da
 
-let check_stmt (stmt : Parser.stmt) : semantic_errors = []
+let rec check_loop (loop : Parser.loop) : semantic_errors =
+  match loop with
+  (* check while loop *)
+  | WHILE while_lp -> check_cond_expr while_lp.cond @ check_block while_lp.body
+  (* check for loop *)
+  | FOR for_lp ->
+      let init =
+        match for_lp.init with
+        | ASST at -> check_asst at
+        | DECL_ASST da -> check_decl_asst da
+      in
+      init
+      @ check_cond_expr for_lp.cond
+      @ check_expr for_lp.update @ check_block for_lp.body
 
-(* check vardecl *)
-(* check asst *)
-(* check expr *)
-(* check func_call *)
-(* check whether undeclared vars being used *)
-let check_block (asst : Parser.block) : semantic_errors = []
+and check_stmt (stmt : Parser.stmt) : semantic_errors =
+  (* check stmt *)
+  match stmt with
+  | VARDECL vd -> check_var_decl vd
+  | ASST at -> check_asst at
+  | LOOP lp -> check_loop lp
+  | IF blk -> check_block blk
+  | IF_ELSE (if_blk, else_blk) -> check_block if_blk @ check_block else_blk
+  | RETURN ret_expr -> (
+      match ret_expr with EXPR e | SOME_EXPR e -> check_expr e | NONE -> [])
+  | EXP e -> check_expr e
+  | EMPTY -> []
+
+and check_block (block : Parser.block) : semantic_errors =
+  (* check block *)
+  match block with
+  | STMTS stmts -> List.fold_left (fun acc st -> acc @ check_stmt st) [] stmts
 
 (* check each statement in block *)
 let check_func (func : Parser.func_decl) : semantic_errors = []
