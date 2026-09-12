@@ -1,9 +1,10 @@
 type semantic_errors = string list
 type var_details = { mut : bool; dtype : Lexer.dtype; assigned_val : bool }
+type func_details = { dtype : Lexer.dtype; params : Parser.param_list }
 
 let var_env = Hashtbl.create 100 (* maps var -> var_details *)
 
-let func_enc =
+let func_env =
   Hashtbl.create
     100 (* maps func -> type declarations, param names & type declarations *)
 
@@ -70,12 +71,90 @@ let rec check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
   | _ -> []
 
 (* check whether undeclared vars being used *)
-let check_expr (expr : Parser.expr) : semantic_errors = []
-(* check cond_expr *)
-(* check whether arithmetic_op compatible with its operands *)
-(* check increment *)
-(* check func_call *)
-(* check whether undeclared vars being used *)
+let rec check_expr (expr : Parser.expr) : semantic_errors =
+  match expr with
+  | VAR var -> (
+      (* condition: var must be defined and assigned a value *)
+      match Hashtbl.find_opt var_env var with
+      | Some ent -> (
+          match ent.assigned_val with
+          | true -> []
+          | false -> [ "Expression has an unassigned variable!" ])
+      | _ -> [ "Expression has an undefined variable!" ])
+  (* check increment *)
+  | INCREMENT var -> (
+      (* condition: var must be defined and assigned a value *)
+      match Hashtbl.find_opt var_env var with
+      | Some ent -> (
+          match ent.assigned_val with
+          (* condition: var must be an integer variable *)
+          | true -> (
+              match ent.dtype with
+              | INT -> []
+              | _ -> [ "Increment operation requires an integer variable!" ])
+          | false -> [ "Expression has an unassigned variable!" ])
+      | _ -> [ "Expression has an undefined variable!" ])
+  (* check conditional expression *)
+  | COND ce -> check_cond_expr ce
+  (* check function call *)
+  | FUNC_CALL fc -> check_func_call fc
+  (* check arithmetic expression *)
+  | BINARY (arithmetic_op, exp1, exp2) -> (
+      match (exp1, exp2) with
+      | VAR var1, VAR var2 -> (
+          (* condition: vars must be defined and assigned a value *)
+          match
+            (Hashtbl.find_opt var_env var1, Hashtbl.find_opt var_env var2)
+          with
+          | Some ent1, Some ent2 -> (
+              (* check whether the variables have been assigned values *)
+              match (ent1.assigned_val, ent2.assigned_val) with
+              | true, true -> (
+                  (* condition: both variables should have matching types *)
+                  (* condition: variable operands cannot be boolean *)
+                  match (ent1.dtype, ent2.dtype) with
+                  | INT, INT -> []
+                  | _, _ ->
+                      [
+                        "Arithmetic Expression cannot compare non-boolean \
+                         types & variables of different types !";
+                      ])
+              | _ -> [ "Expression compares unassigned variables!" ])
+          | _, _ -> [ "Expression compares undefined variables!" ])
+      | VAR var, e | e, VAR var -> (
+          (* check whether var is declared *)
+          match Hashtbl.find_opt var_env var with
+          | Some ent -> (
+              (* check whether var is assigned a value *)
+              match ent.assigned_val with
+              | true -> (
+                  match ent.dtype with
+                  | INT -> check_expr e
+                  | _ -> "Expression requires integer operands" :: check_expr e)
+              | false ->
+                  "Expression compares unassigned variables!" :: check_expr e)
+          | _ -> "Expression compares undefined variable!" :: check_expr e)
+      (* check func_call *)
+      | FUNC_CALL f, e | e, FUNC_CALL f -> (
+          (* conditional: function used in arithmetic expression should return an integer *)
+
+          (* check return type of function *)
+          match Hashtbl.find_opt func_env f with
+          | Some ent -> (
+              match ent.dtype with
+              | INT -> []
+              | _ ->
+                  "Only function of return type INT can be used as \
+                   subexpression" :: check_expr e)
+          | _ -> "Undefined function used in expression! " :: check_expr e)
+      | COND ce, _ | _, COND ce ->
+          [
+            "Arithmetic operations cannot be performed on conditional \
+             expressions!";
+          ]
+      (* check both operands *)
+      | _ -> check_expr exp1 @ check_expr exp2)
+  | _ -> []
 
 let check_stmt (stmt : Parser.stmt) : semantic_errors = []
 
