@@ -52,6 +52,7 @@ type partial_token =
   (* helps handle tokens spanning multiple characters *)
   | DIGIT
   | CHAR
+  | NEGATIVE_DIGIT
   | WS
 
 type accum =
@@ -130,6 +131,7 @@ let merge_partial_token (acc : accum) : token option =
   | Accum (chars, tok_type) -> (
       match tok_type with
       | DIGIT -> Some (NUMBER (int_of_char_list (List.rev chars)))
+      | NEGATIVE_DIGIT -> Some (NUMBER (-int_of_char_list (List.rev chars)))
       | CHAR -> Some (IDENTIFIER (string_of_char_list (List.rev chars)))
       | WS -> Some WHITESPACE)
 
@@ -177,7 +179,11 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
       (* words *)
       | 'a' .. 'z' | 'A' .. 'Z' -> get_token rest (Accum ([ c ], CHAR))
       (* numbers *)
-      | '0' .. '9' -> get_token rest (Accum ([ c ], DIGIT))
+      | '0' .. '9' -> (
+          match acc with
+          | Accum (_, NEGATIVE_DIGIT) ->
+              get_token rest (Accum ([ c ], NEGATIVE_DIGIT))
+          | _ -> get_token rest (Accum ([ c ], DIGIT)))
       (* whitespace *)
       | ' ' | '\t' | '\n' | '\r' -> get_token rest (Accum ([ c ], WS))
       (* syntax *)
@@ -194,7 +200,7 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
           match rest with
           | '+' :: rem -> (Some INCREMENT, rem)
           | _ -> (Some ADD, rest))
-      | '-' -> (Some SUBTRACT, rest)
+      | '-' -> get_token rest (Accum ([], NEGATIVE_DIGIT))
       | '*' -> (Some MULTIPLY, rest)
       | '/' -> (Some DIVIDE, rest)
       | '^' -> (Some POW, rest)
@@ -212,6 +218,7 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
       | '0' .. '9' -> (
           match tok_type with
           | DIGIT -> get_token rest (Accum (c :: partials, tok_type))
+          | NEGATIVE_DIGIT -> get_token rest (Accum (c :: partials, tok_type))
           | _ -> (merge_partial_token acc, c :: rest))
       | ' ' | '\t' | '\n' | '\r' -> (
           match tok_type with
@@ -239,6 +246,7 @@ let rec tokenize_helper (accum : token list) (prog : string list) : token list =
       | "Some" -> tokenize_helper (SOME :: accum) rest
       | "None" -> tokenize_helper (NONE :: accum) rest
       (* operations *)
+      | "-" -> tokenize_helper (SUBTRACT :: accum) rest
       | "==" -> tokenize_helper (EQUALS :: accum) rest
       | "!=" -> tokenize_helper (NOT_EQUALS :: accum) rest
       | "<=" -> tokenize_helper (LESS_THAN_EQUALS :: accum) rest
