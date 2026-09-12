@@ -26,7 +26,6 @@ and var_init = ASST of asst | DECL_ASST of decl_asst
 (* Expression *)
 and expr =
   | INT of int
-  | STRING of string
   | VAR of ident
   | INCREMENT of ident
   | FUNC_CALL of func_call

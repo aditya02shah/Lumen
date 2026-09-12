@@ -209,7 +209,6 @@ and get_expr_type (expr : Parser.expr) : Lexer.dtype option =
       | None -> None)
   | BINARY (_, _, _) -> Some INT
   | COND _ -> Some BOOL
-  | _ -> Some INT
 
 let check_asst (asst : Parser.asst) : semantic_errors =
   (* condition: check if var is defined *)

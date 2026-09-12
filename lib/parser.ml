@@ -26,14 +26,22 @@ and var_init = ASST of asst | DECL_ASST of decl_asst
 (* Expression *)
 and expr =
   | INT of int
-  | STRING of string
   | VAR of ident
   | INCREMENT of ident
   | FUNC_CALL of func_call
   | BINARY of arithmetic_op * expr * expr
   | COND of cond_expr
 
+and arithmetic_op = ADD | MULTIPLY | SUBTRACT | DIVIDE | MOD | POW
+
 (* conditional expression *)
+and cond_expr =
+  | BOOL_VAL of bool_value
+  | COMBINATION of logical_combination * cond_expr * cond_expr
+
+and bool_value = BOOL of bool | VAL_CMP of logical_compare * value * value
+and logical_combination = LOGICAL_AND | LOGICAL_OR
+
 and logical_compare =
   | LESS_THAN
   | LESS_THAN_EQUALS
@@ -41,14 +49,6 @@ and logical_compare =
   | GREATER_THAN_EQUALS
   | EQUALS
   | NOT_EQUALS
-
-and bool_value = BOOL of bool | VAL_CMP of logical_compare * value * value
-and arithmetic_op = ADD | MULTIPLY | SUBTRACT | DIVIDE | MOD | POW
-and logical_combination = LOGICAL_AND | LOGICAL_OR
-
-and cond_expr =
-  | BOOL_VAL of bool_value
-  | COMBINATION of logical_combination * cond_expr * cond_expr
 
 (* Functions *)
 
@@ -104,7 +104,6 @@ type prog = func_decl list
 let rec format_expr expr =
   match expr with
   | INT n -> Printf.sprintf "INT(%d)" n
-  | STRING s -> Printf.sprintf "STRING(%S)" s
   | INCREMENT (IDENT i) -> Printf.sprintf "INCREMENT IDENT(%s)" i
   | VAR (IDENT i) -> Printf.sprintf "IDENT(%s)" i
   | FUNC_CALL fc -> "FUNCCALL"
@@ -342,9 +341,11 @@ and match_valcmp (tokens : Lexer.token list) :
 and match_boolval (tokens : Lexer.token list) :
     cond_expr option * Lexer.token list =
   (* 
-  boolval = bool
-          = val logical_compare val  
-          = "(" cond_expr ")"
+  boolval -> bool
+          -> valcmp
+          -> "(" cond_expr ")"
+
+  valcmp -> val logical_compare val
   *)
   match tokens with
   | [] -> (None, tokens)
