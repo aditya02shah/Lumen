@@ -1,5 +1,6 @@
 type semantic_errors = string list
-type var_details = { mut : bool; dtype : Lexer.dtype; assigned_val : bool }
+type asst_val = NONE | EXPR of Parser.expr
+type var_details = { mut : bool; dtype : Lexer.dtype; assigned_val : asst_val }
 type func_details = { dtype : Lexer.dtype; params : Parser.param_list }
 
 let var_env = Hashtbl.create 100 (* maps var -> var_details *)
@@ -36,12 +37,13 @@ let rec check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
           | Some ent -> (
               (* check whether var is assigned a value *)
               match ent.assigned_val with
-              | true -> (
+              | NONE ->
+                  [ "Conditional Expression compares unassigned variables!" ]
+              | _ -> (
                   match ent.dtype with
                   | INT -> []
                   | _ -> [ "Conditional Expression requires integer operands" ])
-              | false ->
-                  [ "Conditional Expression compares unassigned variables!" ])
+              )
           | _ -> [ "Conditional Expression compares undefined variable!" ])
       | IDENTIFIER var1, IDENTIFIER var2 -> (
           (* condition: both variables should be defined and assigned a value *)
@@ -53,7 +55,7 @@ let rec check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
           | Some ent1, Some ent2 -> (
               (* check whether the variables have been assigned values *)
               match (ent1.assigned_val, ent2.assigned_val) with
-              | true, true -> (
+              | EXPR e1, EXPR e2 -> (
                   (* condition: both variables should have matching types *)
                   match (ent1.dtype, ent2.dtype) with
                   | BOOL, BOOL -> []
@@ -78,8 +80,8 @@ let rec check_expr (expr : Parser.expr) : semantic_errors =
       match Hashtbl.find_opt var_env var with
       | Some ent -> (
           match ent.assigned_val with
-          | true -> []
-          | false -> [ "Expression has an unassigned variable!" ])
+          | EXPR e -> []
+          | NONE -> [ "Expression has an unassigned variable!" ])
       | _ -> [ "Expression has an undefined variable!" ])
   (* check increment *)
   | INCREMENT var -> (
@@ -88,11 +90,11 @@ let rec check_expr (expr : Parser.expr) : semantic_errors =
       | Some ent -> (
           match ent.assigned_val with
           (* condition: var must be an integer variable *)
-          | true -> (
+          | EXPR e -> (
               match ent.dtype with
               | INT -> []
               | _ -> [ "Increment operation requires an integer variable!" ])
-          | false -> [ "Expression has an unassigned variable!" ])
+          | NONE -> [ "Expression has an unassigned variable!" ])
       | _ -> [ "Expression has an undefined variable!" ])
   (* check conditional expression *)
   | COND ce -> check_cond_expr ce
@@ -109,7 +111,7 @@ let rec check_expr (expr : Parser.expr) : semantic_errors =
           | Some ent1, Some ent2 -> (
               (* check whether the variables have been assigned values *)
               match (ent1.assigned_val, ent2.assigned_val) with
-              | true, true -> (
+              | EXPR e1, EXPR e2 -> (
                   (* condition: both variables should have matching types *)
                   (* condition: variable operands cannot be boolean *)
                   match (ent1.dtype, ent2.dtype) with
@@ -127,11 +129,11 @@ let rec check_expr (expr : Parser.expr) : semantic_errors =
           | Some ent -> (
               (* check whether var is assigned a value *)
               match ent.assigned_val with
-              | true -> (
+              | EXPR e -> (
                   match ent.dtype with
                   | INT -> check_expr e
                   | _ -> "Expression requires integer operands" :: check_expr e)
-              | false ->
+              | NONE ->
                   "Expression compares unassigned variables!" :: check_expr e)
           | _ -> "Expression compares undefined variable!" :: check_expr e)
       (* check func_call *)
@@ -155,6 +157,46 @@ let rec check_expr (expr : Parser.expr) : semantic_errors =
       (* check both operands *)
       | _ -> check_expr exp1 @ check_expr exp2)
   | _ -> []
+
+let check_asst (asst : Parser.asst) : semantic_errors =
+  (* condition: check if var is defined *)
+  match Hashtbl.find_opt var_env asst.name with
+  | Some ent -> (
+      (* condition: check if var is mutable *)
+      match ent.mut with
+      | true -> (
+          (* check expr being assigned *)
+          match check_expr asst.expr with
+          | [] -> (
+              match (ent.dtype, asst.expr) with
+              | INT, INT _ -> []
+              | INT, INCREMENT v -> []
+              | BOOL, COND ce -> []
+              | INT, BINARY (op, exp1, exp2) -> []
+              | _, VAR v -> (
+                  (* condition: variable types should match *)
+                  match Hashtbl.find_opt var_env v with
+                  | Some varent -> (
+                      match (ent.dtype, varent.dtype) with
+                      | INT, INT -> []
+                      | BOOL, BOOL -> []
+                      | _, _ ->
+                          [ "Cannot assign to variable of different type!" ])
+                  | None -> [])
+              | _, FUNC_CALL f -> (
+                  (* condition: variable type and function type should match *)
+                  match Hashtbl.find_opt func_env f with
+                  | Some fent -> (
+                      match (ent.dtype, fent.dtype) with
+                      | INT, INT -> []
+                      | BOOL, BOOL -> []
+                      | _, _ ->
+                          [ "Cannot assign to function of different type!" ])
+                  | None -> [])
+              | _ -> [ "Assigning variable to invalid expression!" ])
+          | errs -> "Assigning to invalid expression!" :: errs)
+      | false -> [ "Cannot assigned to immutable variable" ])
+  | _ -> [ "Cannot assigned to undefined variable" ]
 
 let check_stmt (stmt : Parser.stmt) : semantic_errors = []
 
