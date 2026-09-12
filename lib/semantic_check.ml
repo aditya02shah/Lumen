@@ -198,6 +198,24 @@ let check_asst (asst : Parser.asst) : semantic_errors =
       | false -> [ "Cannot assigned to immutable variable" ])
   | _ -> [ "Cannot assigned to undefined variable" ]
 
+let check_var_decl (var_decl : Parser.var_decl) : semantic_errors =
+  match var_decl with
+  | DECL d ->
+      (* store declaration details for each variable declared *)
+      let decl_mut, decl_type = (d.mut, d.dtype) in
+      List.iter
+        (fun var_name ->
+          Hashtbl.replace var_env var_name
+            { mut = decl_mut; dtype = decl_type; assigned_val = NONE })
+        d.vars;
+      [] (* return [] since no errors found *)
+  | DECL_ASST da ->
+      (* store declaration *)
+      Hashtbl.replace var_env da.asst.name
+        { mut = da.mut; dtype = da.dtype; assigned_val = EXPR da.asst.expr };
+      (* check asst *)
+      check_asst da.asst
+
 let check_stmt (stmt : Parser.stmt) : semantic_errors = []
 
 (* check vardecl *)
