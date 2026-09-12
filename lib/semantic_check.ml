@@ -26,13 +26,16 @@ let rec check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
               (* check whether var is assigned a value *)
               match ent.assigned_val with
               | NONE ->
-                  [ "Conditional Expression compares unassigned variables!" ]
+                  [ "Conditional Expression: comparing unassigned variables!" ]
               | _ -> (
                   match ent.dtype with
                   | INT -> []
-                  | _ -> [ "Conditional Expression requires integer operands" ])
-              )
-          | _ -> [ "Conditional Expression compares undefined variable!" ])
+                  | _ ->
+                      [
+                        "Conditional Expression: comparison requires integer \
+                         operands";
+                      ]))
+          | _ -> [ "Conditional Expression: comparing undefined variable!" ])
       | IDENTIFIER var1, IDENTIFIER var2 -> (
           (* condition: both variables should be defined and assigned a value *)
 
@@ -50,13 +53,13 @@ let rec check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
                   | INT, INT -> []
                   | _, _ ->
                       [
-                        "Conditional Expression cannot compare values of \
+                        "Conditional Expression: cannot compare values of \
                          different types!";
                       ])
-              | _ -> [ "Conditional Expression compares unassigned variables!" ]
-              )
-          | _ -> [ "Conditional Expression compares undefined variables!" ])
-      | _ -> [ "Conditional Expression requires integer operands" ])
+              | _ ->
+                  [ "Conditional Expression: comparing unassigned variables!" ])
+          | _ -> [ "Conditional Expression: comparing undefined variables!" ])
+      | _ -> [ "Conditional Expression: comparing undefined variables" ])
   | COMBINATION (cm, ce1, ce2) -> check_cond_expr ce1 @ check_cond_expr ce2
   | _ -> []
 
@@ -69,21 +72,29 @@ let rec check_expr (expr : Parser.expr) : semantic_errors =
       | Some ent -> (
           match ent.assigned_val with
           | EXPR e -> []
-          | NONE -> [ "Expression has an unassigned variable!" ])
-      | _ -> [ "Expression has an undefined variable!" ])
+          | NONE -> [ "Expression: contains unassigned variable!" ])
+      | _ -> [ "Expression: contains undefined variable!" ])
   (* check increment *)
   | INCREMENT var -> (
       (* condition: var must be defined and assigned a value *)
       match Hashtbl.find_opt var_env var with
       | Some ent -> (
-          match ent.assigned_val with
-          (* condition: var must be an integer variable *)
-          | EXPR e -> (
-              match ent.dtype with
-              | INT -> []
-              | _ -> [ "Increment operation requires an integer variable!" ])
-          | NONE -> [ "Expression has an unassigned variable!" ])
-      | _ -> [ "Expression has an undefined variable!" ])
+          (* condition: var must be mutable *)
+          match ent.mut with
+          | true -> (
+              match ent.assigned_val with
+              (* condition: var must be an integer variable *)
+              | EXPR e -> (
+                  match ent.dtype with
+                  | INT -> []
+                  | _ ->
+                      [
+                        "Expression: Increment operation requires an integer \
+                         variable!";
+                      ])
+              | NONE -> [ "Expression: contains unassigned variable!" ])
+          | false -> [ "Expression: cannot increment immutable variable!" ])
+      | _ -> [ "Expression: contains undefined variable!" ])
   (* check conditional expression *)
   | COND ce -> check_cond_expr ce
   (* check function call *)
@@ -106,11 +117,11 @@ let rec check_expr (expr : Parser.expr) : semantic_errors =
                   | INT, INT -> []
                   | _, _ ->
                       [
-                        "Arithmetic Expression cannot compare non-boolean \
-                         types & variables of different types !";
+                        "Expression: arithmetic expression cannot compare \
+                         non-boolean types or variables of different types !";
                       ])
-              | _ -> [ "Expression compares unassigned variables!" ])
-          | _, _ -> [ "Expression compares undefined variables!" ])
+              | _ -> [ "Expression: contains unassigned variables!" ])
+          | _, _ -> [ "Expression: contains undefined variables!" ])
       | VAR var, e | e, VAR var -> (
           (* check whether var is declared *)
           match Hashtbl.find_opt var_env var with
@@ -120,10 +131,12 @@ let rec check_expr (expr : Parser.expr) : semantic_errors =
               | EXPR e -> (
                   match ent.dtype with
                   | INT -> check_expr e
-                  | _ -> "Expression requires integer operands" :: check_expr e)
+                  | _ ->
+                      "Expression: arithmetic expressions requires integer \
+                       operands" :: check_expr e)
               | NONE ->
-                  "Expression compares unassigned variables!" :: check_expr e)
-          | _ -> "Expression compares undefined variable!" :: check_expr e)
+                  "Expression: contains unassigned variables!" :: check_expr e)
+          | _ -> "Expression: contains undefined variable!" :: check_expr e)
       (* check func_call *)
       | FUNC_CALL f, e | e, FUNC_CALL f -> (
           (* condition: function used in arithmetic expression should return an integer *)
@@ -134,13 +147,13 @@ let rec check_expr (expr : Parser.expr) : semantic_errors =
               match ent.ret_type with
               | DATATYPE INT -> []
               | _ ->
-                  "Only function of return type INT can be used as \
-                   subexpression" :: check_expr e)
+                  "Expression: non-integer functions cannot be used in \
+                   arithmetic expressions" :: check_expr e)
           | _ -> "Undefined function used in expression! " :: check_expr e)
       | COND ce, _ | _, COND ce ->
           [
-            "Arithmetic operations cannot be performed on conditional \
-             expressions!";
+            "Expression: arithmetic expressions cannot be performed on \
+             conditional expressions!";
           ]
       (* check both operands *)
       | _ -> check_expr exp1 @ check_expr exp2)
@@ -158,7 +171,7 @@ and check_func_call (func_call : Parser.func_call) : semantic_errors =
       (* compare parameters & arguments *)
       | [] -> compare_params_and_args ent.params func_call.args
       | errors -> errors)
-  | None -> [ "Call to undefined function!" ]
+  | None -> [ "Function Call: call to undefined function!" ]
 
 and compare_params_and_args (params : Parser.param_list)
     (args : Parser.arg_list) : semantic_errors =
@@ -170,10 +183,15 @@ and compare_params_and_args (params : Parser.param_list)
       match (param_type, get_expr_type arg) with
       | INT, Some INT -> []
       | BOOL, Some BOOL -> []
-      | _, _ -> [ "Argument type doesn't match parameter type!" ])
+      | _, _ -> [ "Function Call: argument type doesn't match parameter type!" ]
+      )
   | [], [] -> []
   (* condition: argument count must match parameter count *)
-  | _ -> [ "Argument count must match parameter count in function call!" ]
+  | _ ->
+      [
+        "Function Call: argument count must match parameter count in function \
+         call!";
+      ]
 
 and get_expr_type (expr : Parser.expr) : Lexer.dtype option =
   (* NOTE: assumes expr has already been checked *)
@@ -216,7 +234,10 @@ let check_asst (asst : Parser.asst) : semantic_errors =
                       | INT, INT -> []
                       | BOOL, BOOL -> []
                       | _, _ ->
-                          [ "Cannot assign to variable of different type!" ])
+                          [
+                            "Assignment: cannot assign to variable of \
+                             different type!";
+                          ])
                   | None -> [])
               | _, FUNC_CALL f -> (
                   (* condition: variable type and function type should match *)
@@ -226,12 +247,15 @@ let check_asst (asst : Parser.asst) : semantic_errors =
                       | INT, DATATYPE INT -> []
                       | BOOL, DATATYPE BOOL -> []
                       | _, _ ->
-                          [ "Cannot assign to function of different type!" ])
+                          [
+                            "Assignment: cannot assign variable using function \
+                             of different type!";
+                          ])
                   | None -> [])
-              | _ -> [ "Assigning variable to invalid expression!" ])
-          | errs -> "Assigning to invalid expression!" :: errs)
-      | false -> [ "Cannot assigned to immutable variable" ])
-  | _ -> [ "Cannot assigned to undefined variable" ]
+              | _ -> [ "Assignment: contains invalid expression!" ])
+          | errs -> "Assignment: contains invalid expression!" :: errs)
+      | false -> [ "Assignment: cannot assign value to immutable variable" ])
+  | _ -> [ "Assignment: contains undefined variable" ]
 
 let check_decl_asst (decl_asst : Parser.decl_asst) : semantic_errors =
   (* store declaration *)
@@ -323,62 +347,68 @@ let rec check_func_block (block : Parser.block) : semantic_errors =
   | re :: [] -> ( match block with STMTS stmt -> check_sub_blocks stmt)
   | _ ->
       [
-        "each block inside function cannot contain more than 1 return \
-         expression ";
+        "Function: each block inside function cannot contain more than 1 \
+         return expression ";
       ]
 
 let check_func_decl (func : Parser.func_decl) : semantic_errors =
   (* condition: each block should contain a maximum of 1 return expression (not including sub-blocks) *)
   match check_func_block func.body with
   | [] -> (
-      (* condition: void function should not contain return expression *)
-      let ret_stmts = get_ret_expr_in_blk func.body in
-      match func.return_type with
-      | DATATYPE d -> (
-          match ret_stmts with
-          | re :: [] -> (
-              (* check return expression *)
-              match check_ret_expr re with
-              | [] -> (
-                  (* condition: return type of function should match the type of the return expression *)
-                  match (re, func.is_optional_type) with
-                  (* condition: optional type return functions should use Some & None *)
-                  | EXPR e, false | SOME_EXPR e, true -> (
-                      match (d, get_expr_type e) with
-                      | INT, Some INT ->
-                          Hashtbl.replace func_env func.func_name
-                            {
-                              is_optional_type = func.is_optional_type;
-                              ret_type = func.return_type;
-                              params = func.params;
-                            };
-                          []
-                      | BOOL, Some BOOL ->
-                          Hashtbl.replace func_env func.func_name
-                            {
-                              is_optional_type = func.is_optional_type;
-                              ret_type = func.return_type;
-                              params = func.params;
-                            };
-                          []
-                      | _, _ ->
-                          [ "Function contains invalid return expression!" ])
-                  | NONE, true -> []
-                  | _ ->
-                      [
-                        "Cannot use optional type return expressions in \
-                         non-optional function declarations";
-                      ])
-              | errs -> errs)
-          | _ ->
-              [
-                "Non-Void function contains multiple return expressions in the \
-                 same block!";
-              ])
-      | VOID -> (
-          match ret_stmts with
-          | [] -> []
-          | _ -> [ "Void function contains return expressions!" ]))
+      (* check block *)
+      match check_block func.body with
+      | [] -> (
+          (* condition: void function should not contain return expression *)
+          let ret_stmts = get_ret_expr_in_blk func.body in
+          match func.return_type with
+          | DATATYPE d -> (
+              match ret_stmts with
+              | re :: [] -> (
+                  (* check return expression *)
+                  match check_ret_expr re with
+                  | [] -> (
+                      (* condition: return type of function should match the type of the return expression *)
+                      match (re, func.is_optional_type) with
+                      (* condition: optional type return functions should use Some & None *)
+                      | EXPR e, false | SOME_EXPR e, true -> (
+                          match (d, get_expr_type e) with
+                          | INT, Some INT ->
+                              Hashtbl.replace func_env func.func_name
+                                {
+                                  is_optional_type = func.is_optional_type;
+                                  ret_type = func.return_type;
+                                  params = func.params;
+                                };
+                              []
+                          | BOOL, Some BOOL ->
+                              Hashtbl.replace func_env func.func_name
+                                {
+                                  is_optional_type = func.is_optional_type;
+                                  ret_type = func.return_type;
+                                  params = func.params;
+                                };
+                              []
+                          | _, _ ->
+                              [
+                                "Function: contains invalid return expression!";
+                              ])
+                      | NONE, true -> []
+                      | _ ->
+                          [
+                            "Function: cannot use optional type return \
+                             expressions in non-optional function declarations";
+                          ])
+                  | errs -> errs)
+              | _ ->
+                  [
+                    "Function: non-void function contains multiple return \
+                     expressions in the same block!";
+                  ])
+          | VOID -> (
+              match ret_stmts with
+              | [] -> []
+              | _ -> [ "Function: void function cannot return value!" ]))
+      | es -> es)
   | err -> err
 
 let rec check_prog (program : Parser.prog) : semantic_errors =
