@@ -1,5 +1,7 @@
+(* --TYPE DECLARATIONS-- *)
 type dtype = INT | BOOL (* supported datatypes *)
 
+(* recognised tokens *)
 type token =
   (* data *)
   | NUMBER of int
@@ -47,6 +49,12 @@ type token =
   | NOT
   | UNKNOWN of string (* unrecognized tokens *)
 
-val tokenize : string -> token list * token list
+(* position-aware types *)
+type position = int (* line number *)
+type located_str = string * position (* source strings *)
+type located_token = token * position (* source tokens *)
+type lexer_errors = located_token list (* source errors *)
+
+val tokenize : string -> located_token list * lexer_errors
 val print_list : ('a -> string) -> 'a list -> unit
 val format_token : token -> string

@@ -16,12 +16,16 @@ type func_details = {
 let var_env = Hashtbl.create 100 (* maps var -> var_details *)
 let func_env = Hashtbl.create 100 (* maps func -> func_details *)
 
+(* --HELPER FUNCTIONS-- *)
+let format_msg (pos : Lexer.position) (msg : string) : string =
+  "Line (" ^ string_of_int pos ^ ") - " ^ msg
+
 (* --SEMANTIC CHECKER IMPLEMENTATION-- *)
 (* Variables *)
 (* variable declaration *)
 let rec check_var_decl (var_decl : Parser.var_decl) : semantic_errors =
   match var_decl with
-  | DECL d ->
+  | DECL (d, _) ->
       (* store variable declaration *)
       let decl_mut, decl_type = (d.mut, d.dtype) in
       List.iter
@@ -34,52 +38,62 @@ let rec check_var_decl (var_decl : Parser.var_decl) : semantic_errors =
 
 and check_decl_asst (decl_asst : Parser.decl_asst) : semantic_errors =
   (* store declaration *)
-  Hashtbl.replace var_env decl_asst.asst.name
-    {
-      mut = decl_asst.mut;
-      dtype = decl_asst.dtype;
-      assigned_val = EXPR decl_asst.asst.expr;
-    };
-  (* check asst *)
-  check_asst decl_asst.asst true
+  match decl_asst with
+  | da, _ -> (
+      match da.asst with
+      | at, _ ->
+          Hashtbl.replace var_env at.name
+            { mut = da.mut; dtype = da.dtype; assigned_val = EXPR at.expr };
+          (* check asst *)
+          check_asst da.asst true)
 
 (* variable assignment *)
-
 and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
   (* condition: var must be defined *)
-  match Hashtbl.find_opt var_env asst.name with
-  | Some ent ->
-      if
-        (* condition: var must be mutable *)
-        is_decl_asst = true || ent.mut = true
-      then
-        (* check the expr variable is being assigned to *)
-        match check_expr asst.expr with
-        | [] -> (
-            match (ent.dtype, get_expr_type asst.expr) with
-            | INT, Some INT -> []
-            | BOOL, Some BOOL -> []
-            | _ ->
-                [
-                  "Assignment: variable type and expression type do not match!";
-                ])
-        | errs -> "Assignment: contains invalid expression!" :: errs
-      else [ "Assignment: cannot assign value to immutable variable!" ]
-  | _ -> [ "Assignment: contains undefined variable!" ]
+  match asst with
+  | at, pos -> (
+      match Hashtbl.find_opt var_env at.name with
+      | Some ent ->
+          if
+            (* condition: var must be mutable *)
+            is_decl_asst = true || ent.mut = true
+          then
+            (* check the expr variable is being assigned to *)
+            match check_expr at.expr with
+            | [] -> (
+                match (ent.dtype, get_expr_type at.expr) with
+                | INT, Some INT -> []
+                | BOOL, Some BOOL -> []
+                | _ ->
+                    [
+                      format_msg pos
+                        "Assignment: variable type and expression type do not \
+                         match!";
+                    ])
+            | errs ->
+                format_msg pos "Assignment: contains invalid expression!"
+                :: errs
+          else
+            [
+              format_msg pos
+                "Assignment: cannot assign value to immutable variable!";
+            ]
+      | _ -> [ format_msg pos "Assignment: contains undefined variable!" ])
 
 (* Expression *)
 and check_expr (expr : Parser.expr) : semantic_errors =
   match expr with
-  | VAR var -> (
+  | VAR var, pos -> (
       (* condition: var must be defined and assigned a value *)
       match Hashtbl.find_opt var_env var with
       | Some ent -> (
           match ent.assigned_val with
           | EXPR e -> []
-          | NONE -> [ "Expression: contains unassigned variable!" ])
+          | NONE ->
+              [ format_msg pos "Expression: contains unassigned variable!" ])
       | _ -> [ "Expression: contains undefined variable!" ])
   (* check increment *)
-  | INCREMENT var -> (
+  | INCREMENT var, pos -> (
       (* condition: var must be defined and assigned a value *)
       match Hashtbl.find_opt var_env var with
       | Some ent -> (
@@ -93,20 +107,27 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                   | INT -> []
                   | _ ->
                       [
-                        "Expression: Increment operation requires an integer \
-                         variable!";
+                        format_msg pos
+                          "Expression: Increment operation requires an integer \
+                           variable!";
                       ])
-              | NONE -> [ "Expression: contains unassigned variable!" ])
-          | false -> [ "Expression: cannot increment immutable variable!" ])
-      | _ -> [ "Expression: contains undefined variable!" ])
+              | NONE ->
+                  [ format_msg pos "Expression: contains unassigned variable!" ]
+              )
+          | false ->
+              [
+                format_msg pos
+                  "Expression: cannot increment immutable variable!";
+              ])
+      | _ -> [ format_msg pos "Expression: contains undefined variable!" ])
   (* check conditional expression *)
-  | COND ce -> check_cond_expr ce
+  | COND ce, _ -> check_cond_expr ce
   (* check function call *)
-  | FUNC_CALL fc -> check_func_call fc
+  | FUNC_CALL fc, _ -> check_func_call fc
   (* check arithmetic expression *)
-  | BINARY (arithmetic_op, exp1, exp2) -> (
+  | BINARY (arithmetic_op, exp1, exp2), pos -> (
       match (exp1, exp2) with
-      | VAR var1, VAR var2 -> (
+      | (VAR var1, _), (VAR var2, _) -> (
           (* condition: variables must be defined and assigned a value *)
           match
             (Hashtbl.find_opt var_env var1, Hashtbl.find_opt var_env var2)
@@ -121,12 +142,17 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                   | INT, INT -> []
                   | _, _ ->
                       [
-                        "Expression: arithmetic expression cannot compare \
-                         non-boolean types or variables of different types !";
+                        format_msg pos
+                          "Expression: arithmetic expression cannot compare \
+                           non-boolean types or variables of different types !";
                       ])
-              | _ -> [ "Expression: contains unassigned variables!" ])
-          | _, _ -> [ "Expression: contains undefined variables!" ])
-      | VAR var, e | e, VAR var -> (
+              | _ ->
+                  [
+                    format_msg pos "Expression: contains unassigned variables!";
+                  ])
+          | _, _ ->
+              [ format_msg pos "Expression: contains undefined variables!" ])
+      | (VAR var, pos), e | e, (VAR var, pos) -> (
           (* check whether var is defined *)
           match Hashtbl.find_opt var_env var with
           | Some ent -> (
@@ -136,28 +162,39 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                   match ent.dtype with
                   | INT -> check_expr e
                   | _ ->
-                      "Expression: arithmetic expressions requires integer \
-                       operands!" :: check_expr e)
+                      format_msg pos
+                        "Expression: arithmetic expressions requires integer \
+                         operands!"
+                      :: check_expr e)
               | NONE ->
-                  "Expression: contains unassigned variables!" :: check_expr e)
-          | _ -> "Expression: contains undefined variable!" :: check_expr e)
+                  format_msg pos "Expression: contains unassigned variables!"
+                  :: check_expr e)
+          | _ ->
+              format_msg pos "Expression: contains undefined variable!"
+              :: check_expr e)
       (* check func_call *)
-      | FUNC_CALL f, e | e, FUNC_CALL f -> (
+      | (FUNC_CALL (f, _), pos), e | e, (FUNC_CALL (f, _), pos) -> (
           (* condition: only integer functions must be used in arithmetic expressions *)
 
           (* check return type of function *)
           match Hashtbl.find_opt func_env f.func_name with
           | Some ent -> (
               match ent.ret_type with
-              | DATATYPE INT -> []
+              | DATATYPE INT, _ -> []
               | _ ->
-                  "Expression: non-integer functions cannot be used in \
-                   arithmetic expressions!" :: check_expr e)
-          | _ -> "Undefined function used in expression! " :: check_expr e)
-      | COND ce, _ | _, COND ce ->
+                  format_msg pos
+                    "Expression: non-integer functions cannot be used in \
+                     arithmetic expressions!"
+                  :: check_expr e)
+          | _ ->
+              format_msg pos
+                "Expression: undefined function used in expression! "
+              :: check_expr e)
+      | (COND ce, pos), _ | _, (COND ce, pos) ->
           [
-            "Expression: arithmetic expressions cannot be performed on \
-             conditional expressions!";
+            format_msg pos
+              "Expression: arithmetic expressions cannot be performed on \
+               conditional expressions!";
           ]
       (* check both operands *)
       | _ -> check_expr exp1 @ check_expr exp2)
@@ -166,28 +203,37 @@ and check_expr (expr : Parser.expr) : semantic_errors =
 (* conditional expression *)
 and check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
   match cond_expr with
-  | BOOL_VAL (VAL_CMP (op, val1, val2)) -> (
+  | BOOL_VAL (VAL_CMP (op, val1, val2), pos) -> (
       (* condition: logical_compare operands must be integer literals/variables *)
       match (val1, val2) with
-      | NUMBER n1, NUMBER n2 -> []
-      | NUMBER n, IDENTIFIER var | IDENTIFIER var, NUMBER n -> (
+      | (NUMBER n1, _), (NUMBER n2, _) -> []
+      | (NUMBER n, _), (IDENTIFIER var, _) | (IDENTIFIER var, _), (NUMBER n, _)
+        -> (
           (* check whether var is declared *)
           match Hashtbl.find_opt var_env var with
           | Some ent -> (
               (* check whether var is assigned a value *)
               match ent.assigned_val with
               | NONE ->
-                  [ "Conditional Expression: comparing unassigned variables!" ]
+                  [
+                    format_msg pos
+                      "Conditional Expression: comparing unassigned variables!";
+                  ]
               | _ -> (
                   match ent.dtype with
                   | INT -> []
                   | _ ->
                       [
-                        "Conditional Expression: comparison requires integer \
-                         operands!";
+                        format_msg pos
+                          "Conditional Expression: comparison requires integer \
+                           operands!";
                       ]))
-          | _ -> [ "Conditional Expression: comparing undefined variable!" ])
-      | IDENTIFIER var1, IDENTIFIER var2 -> (
+          | _ ->
+              [
+                format_msg pos
+                  "Conditional Expression: comparing undefined variable!";
+              ])
+      | (IDENTIFIER var1, pos), (IDENTIFIER var2, _) -> (
           (* condition: both the variables must be defined and assigned a value *)
           match
             (Hashtbl.find_opt var_env var1, Hashtbl.find_opt var_env var2)
@@ -202,35 +248,47 @@ and check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
                   | INT, INT -> []
                   | _, _ ->
                       [
-                        "Conditional Expression: cannot compare values of \
-                         different types!";
+                        format_msg pos
+                          "Conditional Expression: cannot compare values of \
+                           different types!";
                       ])
               | _ ->
-                  [ "Conditional Expression: comparing unassigned variables!" ])
-          | _ -> [ "Conditional Expression: comparing undefined variables!" ])
-      | _ -> [ "Conditional Expression: comparing undefined variables!" ])
-  | COMBINATION (cm, ce1, ce2) -> check_cond_expr ce1 @ check_cond_expr ce2
+                  [
+                    format_msg pos
+                      "Conditional Expression: comparing unassigned variables!";
+                  ])
+          | _ ->
+              [
+                format_msg pos
+                  "Conditional Expression: comparing undefined variables!";
+              ])
+      | _ ->
+          [
+            format_msg pos
+              "Conditional Expression: comparing undefined variables!";
+          ])
+  | COMBINATION ((cm, ce1, ce2), _) -> check_cond_expr ce1 @ check_cond_expr ce2
   | _ -> []
 
 and get_expr_type (expr : Parser.expr) : Lexer.dtype option =
   (* returns the type for an expression if it can be determined, None otherwise *)
   (* NOTE: assumes expr has already been checked *)
   match expr with
-  | INT _ -> Some INT
-  | VAR v -> (
+  | INT _, _ -> Some INT
+  | VAR v, _ -> (
       (* determine var type *)
       match Hashtbl.find_opt var_env v with
       | Some ent -> Some ent.dtype
       | None -> None)
-  | INCREMENT x -> Some INT
-  | FUNC_CALL f -> (
+  | INCREMENT x, _ -> Some INT
+  | FUNC_CALL (f, _), _ -> (
       (* determine func return type *)
       match Hashtbl.find_opt func_env f.func_name with
       | Some ent -> (
-          match ent.ret_type with DATATYPE d -> Some d | VOID -> None)
+          match ent.ret_type with DATATYPE d, _ -> Some d | VOID, _ -> None)
       | None -> None)
-  | BINARY (_, _, _) -> Some INT
-  | COND _ -> Some BOOL
+  | BINARY (_, _, _), _ -> Some INT
+  | COND _, _ -> Some BOOL
 
 and get_ret_expr_in_blk (func_blk : Parser.block) (include_sub_blocks : bool) :
     Parser.ret_expr list =
@@ -238,7 +296,7 @@ and get_ret_expr_in_blk (func_blk : Parser.block) (include_sub_blocks : bool) :
   if include_sub_blocks then
     (* check all sub-blocks *)
     match func_blk with
-    | STMTS stmts ->
+    | STMTS stmts, _ ->
         List.fold_left
           (fun acc st ->
             match st with
@@ -249,14 +307,14 @@ and get_ret_expr_in_blk (func_blk : Parser.block) (include_sub_blocks : bool) :
                 @ get_ret_expr_in_blk else_blk true
             | Parser.LOOP lp -> (
                 match lp with
-                | WHILE lp -> acc @ get_ret_expr_in_blk lp.body true
-                | FOR lp -> acc @ get_ret_expr_in_blk lp.body true)
+                | WHILE lp, _ -> acc @ get_ret_expr_in_blk lp.body true
+                | FOR lp, _ -> acc @ get_ret_expr_in_blk lp.body true)
             | _ -> acc)
           [] stmts
   else
     (* dont check sub-blocks *)
     match func_blk with
-    | STMTS stmts ->
+    | STMTS stmts, _ ->
         List.rev
           (List.fold_left
              (fun acc st ->
@@ -266,84 +324,97 @@ and get_ret_expr_in_blk (func_blk : Parser.block) (include_sub_blocks : bool) :
 and check_ret_expr (ret_expr : Parser.ret_expr) : semantic_errors =
   (* checks expression present in return expression statement *)
   match ret_expr with
-  | EXPR e | SOME_EXPR e -> check_expr e
-  | NONE -> []
+  | EXPR e, _ | SOME_EXPR e, _ -> check_expr e
+  | NONE, _ -> []
 
 (* Functions *)
 (* function declaration *)
-and check_func_decl (func : Parser.func_decl) : semantic_errors =
+and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
   (* store func_decl *)
-  Hashtbl.replace func_env func.func_name
-    {
-      is_optional_type = func.is_optional_type;
-      ret_type = func.return_type;
-      params = func.params;
-    };
+  match func_decl with
+  | func, f_pos -> (
+      Hashtbl.replace func_env func.func_name
+        {
+          is_optional_type = func.is_optional_type;
+          ret_type = func.return_type;
+          params = func.params;
+        };
 
-  (* condition: each block must contain a maximum of 1 return expression (not including sub-blocks) *)
-  match check_func_block func.body with
-  | [] -> (
-      (* check block *)
-      match check_block func.body with
+      (* condition: each block must contain a maximum of 1 return expression (not including sub-blocks) *)
+      match check_func_block func.body with
       | [] -> (
-          (* condition: void function must not contain return expression *)
-          let ret_stmts = get_ret_expr_in_blk func.body true in
-          match func.return_type with
-          | DATATYPE d ->
-              (* check each return expression and gather errors *)
-              List.flatten
-                (List.map
-                   (fun re ->
-                     (* check return expression *)
-                     match check_ret_expr re with
-                     | [] -> (
-                         (* condition: return type of function must match return expression's type *)
-                         (* condition: return expressions in optional functions must use "Some" & "None" *)
-                         match (re, func.is_optional_type) with
-                         | EXPR e, false | SOME_EXPR e, true -> (
-                             match (d, get_expr_type e) with
-                             | INT, Some INT -> []
-                             | BOOL, Some BOOL -> []
-                             | _, _ ->
+          (* check block *)
+          match check_block func.body with
+          | [] -> (
+              (* condition: void function must not contain return expression *)
+              let ret_stmts = get_ret_expr_in_blk func.body true in
+              match func.return_type with
+              | DATATYPE d, _ ->
+                  (* check each return expression and gather errors *)
+                  List.flatten
+                    (List.map
+                       (fun re ->
+                         (* check return expression *)
+                         match check_ret_expr re with
+                         | [] -> (
+                             (* condition: return type of function must match return expression's type *)
+                             (* condition: return expressions in optional functions must use "Some" & "None" *)
+                             match (re, func.is_optional_type) with
+                             | (EXPR e, e_pos), false
+                             | (SOME_EXPR e, e_pos), true -> (
+                                 match (d, get_expr_type e) with
+                                 | INT, Some INT -> []
+                                 | BOOL, Some BOOL -> []
+                                 | _, _ ->
+                                     [
+                                       format_msg e_pos
+                                         "Function: contains invalid return \
+                                          expression!";
+                                     ])
+                             | (NONE, e_pos), true -> []
+                             | (_, e_pos), _ ->
                                  [
-                                   "Function: contains invalid return \
-                                    expression!";
+                                   format_msg e_pos
+                                     "Function: cannot use optional type \
+                                      return expressions in non-optional \
+                                      function declarations!";
                                  ])
-                         | NONE, true -> []
                          | _ ->
                              [
-                               "Function: cannot use optional type return \
-                                expressions in non-optional function \
-                                declarations!";
+                               format_msg f_pos
+                                 "Function: non-void function contains \
+                                  multiple return expressions in the same \
+                                  block!";
                              ])
-                     | _ ->
-                         [
-                           "Function: non-void function contains multiple \
-                            return expressions in the same block!";
-                         ])
-                   ret_stmts)
-          | VOID -> (
-              (* void function shouldn't contain return expressions *)
-              match ret_stmts with
-              | [] -> []
-              | _ -> [ "Function: void function cannot return value!" ]))
-      | es -> es)
-  | err -> err
+                       ret_stmts)
+              | VOID, _ -> (
+                  (* void function shouldn't contain return expressions *)
+                  match ret_stmts with
+                  | [] -> []
+                  | _ ->
+                      [
+                        format_msg f_pos
+                          "Function: void function cannot return value!";
+                      ]))
+          | es -> es)
+      | err -> err)
 
 (* function call *)
 and check_func_call (func_call : Parser.func_call) : semantic_errors =
-  (* check if function has been defined *)
-  match Hashtbl.find_opt func_env func_call.func_name with
-  | Some ent -> (
-      (* check each expression in the list of arguments *)
-      let errs =
-        List.fold_left (fun acc exp -> acc @ check_expr exp) [] func_call.args
-      in
-      match errs with
-      (* compare parameters with arguments *)
-      | [] -> compare_params_with_args ent.params func_call.args
-      | errors -> errors)
-  | None -> [ "Function Call: call to undefined function!" ]
+  match func_call with
+  | func, pos -> (
+      (* check if function has been defined *)
+      match Hashtbl.find_opt func_env func.func_name with
+      | Some ent -> (
+          (* check each expression in the list of arguments *)
+          let errs =
+            List.fold_left (fun acc exp -> acc @ check_expr exp) [] func.args
+          in
+          match errs with
+          (* compare parameters with arguments *)
+          | [] -> compare_params_with_args ent.params func.args pos
+          | errors -> errors)
+      | None -> [ format_msg pos "Function Call: call to undefined function!" ])
 
 and check_func_block (block : Parser.block) : semantic_errors =
   (* condition: each block should contain a maximum of 1 return expression *)
@@ -361,22 +432,25 @@ and check_func_block (block : Parser.block) : semantic_errors =
         | LOOP lp -> (
             (* check loop *)
             match lp with
-            | WHILE lp -> check_func_block lp.body
-            | FOR lp -> check_func_block lp.body)
+            | WHILE lp, _ -> check_func_block lp.body
+            | FOR lp, _ -> check_func_block lp.body)
         | _ -> check_sub_blocks st)
   in
-  match get_ret_expr_in_blk block false with
-  (* a block can contain upto 1 return expressions *)
-  | [] -> ( match block with STMTS stmt -> check_sub_blocks stmt)
-  | re :: [] -> ( match block with STMTS stmt -> check_sub_blocks stmt)
-  | _ ->
-      [
-        "Function: each block inside function cannot contain more than 1 \
-         return expression ";
-      ]
+  match block with
+  | _, pos -> (
+      match get_ret_expr_in_blk block false with
+      (* a block can contain upto 1 return expressions *)
+      | [] -> ( match block with STMTS stmt, _ -> check_sub_blocks stmt)
+      | re :: [] -> ( match block with STMTS stmt, _ -> check_sub_blocks stmt)
+      | _ ->
+          [
+            format_msg pos
+              "Function: each block inside function cannot contain more than 1 \
+               return expression ";
+          ])
 
 and compare_params_with_args (params : Parser.param_list)
-    (args : Parser.arg_list) : semantic_errors =
+    (args : Parser.arg_list) (pos : Lexer.position) : semantic_errors =
   (* helper function which compares parameters & arguments *)
   (* Note: each argument should already be checked *)
   match (params, args) with
@@ -385,14 +459,18 @@ and compare_params_with_args (params : Parser.param_list)
       match (param_type, get_expr_type arg) with
       | INT, Some INT -> []
       | BOOL, Some BOOL -> []
-      | _, _ -> [ "Function Call: argument type doesn't match parameter type!" ]
-      )
+      | _, _ ->
+          [
+            format_msg pos
+              "Function Call: argument type doesn't match parameter type!";
+          ])
   | [], [] -> []
   (* condition: argument count must match parameter count *)
   | _ ->
       [
-        "Function Call: argument count must match parameter count in function \
-         call!";
+        format_msg pos
+          "Function Call: argument count must match parameter count in \
+           function call!";
       ]
 
 (* Statement *)
@@ -405,7 +483,9 @@ and check_stmt (stmt : Parser.stmt) : semantic_errors =
   | IF blk -> check_block blk
   | IF_ELSE (if_blk, else_blk) -> check_block if_blk @ check_block else_blk
   | RETURN ret_expr -> (
-      match ret_expr with EXPR e | SOME_EXPR e -> check_expr e | NONE -> [])
+      match ret_expr with
+      | EXPR e, _ | SOME_EXPR e, _ -> check_expr e
+      | NONE, _ -> [])
   | EXP e -> check_expr e
   | EMPTY -> []
 
@@ -413,19 +493,21 @@ and check_stmt (stmt : Parser.stmt) : semantic_errors =
 and check_block (block : Parser.block) : semantic_errors =
   (* check each statement in block *)
   match block with
-  | STMTS stmts -> List.fold_left (fun acc st -> acc @ check_stmt st) [] stmts
+  | STMTS stmts, _ ->
+      List.fold_left (fun acc st -> acc @ check_stmt st) [] stmts
 
 (* Loops *)
 and check_loop (loop : Parser.loop) : semantic_errors =
   match loop with
   (* check while loop *)
-  | WHILE while_lp -> check_cond_expr while_lp.cond @ check_block while_lp.body
+  | WHILE while_lp, _ ->
+      check_cond_expr while_lp.cond @ check_block while_lp.body
   (* check for loop *)
-  | FOR for_lp ->
+  | FOR for_lp, _ ->
       let init =
         match for_lp.init with
-        | ASST at -> check_asst at false
-        | DECL_ASST da -> check_decl_asst da
+        | ASST at, _ -> check_asst at false
+        | DECL_ASST da, _ -> check_decl_asst da
       in
       init
       @ check_cond_expr for_lp.cond

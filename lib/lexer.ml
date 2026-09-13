@@ -1,6 +1,7 @@
 (* --TYPE DECLARATIONS-- *)
 type dtype = INT | BOOL (* supported datatypes *)
 
+(* recognised tokens *)
 type token =
   (* data *)
   | NUMBER of int
@@ -59,6 +60,12 @@ type accum =
   (* type representing accumlated tokens *)
   | Accum of char list * partial_token
   | Empty
+
+(* position-aware types *)
+type position = int (* line number *)
+type located_str = string * position (* source strings *)
+type located_token = token * position (* source tokens *)
+type lexer_errors = located_token list (* source errors *)
 
 (* --HELPER FUNCTIONS-- *)
 let int_of_char_list chars =
@@ -227,56 +234,75 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
           | _ -> (merge_partial_token acc, c :: rest))
       | _ -> (merge_partial_token acc, c :: rest))
 
-let rec tokenize_helper (accum : token list) (prog : string list) : token list =
+let rec tokenize_helper (accum : located_token list) (prog : located_str list) :
+    located_token list =
   (* helps tokenizes input list *)
   match prog with
   | [] -> accum
-  | word :: rest -> (
+  | (word, pos) :: rest -> (
       match word with
       (* keywords *)
-      | "for" -> tokenize_helper (FOR :: accum) rest
-      | "while" -> tokenize_helper (WHILE :: accum) rest
-      | "return" -> tokenize_helper (RETURN :: accum) rest
-      | "mut" -> tokenize_helper (MUT :: accum) rest
-      | "if" -> tokenize_helper (IF :: accum) rest
-      | "else" -> tokenize_helper (IF :: accum) rest
+      | "for" -> tokenize_helper ((FOR, pos) :: accum) rest
+      | "while" -> tokenize_helper ((WHILE, pos) :: accum) rest
+      | "return" -> tokenize_helper ((RETURN, pos) :: accum) rest
+      | "mut" -> tokenize_helper ((MUT, pos) :: accum) rest
+      | "if" -> tokenize_helper ((IF, pos) :: accum) rest
+      | "else" -> tokenize_helper ((ELSE, pos) :: accum) rest
       (* syntax *)
-      | "int" -> tokenize_helper (DATATYPE INT :: accum) rest
-      | "bool" -> tokenize_helper (DATATYPE BOOL :: accum) rest
-      | "Option" -> tokenize_helper (OPTION :: accum) rest
-      | "Some" -> tokenize_helper (SOME :: accum) rest
-      | "None" -> tokenize_helper (NONE :: accum) rest
+      | "int" -> tokenize_helper ((DATATYPE INT, pos) :: accum) rest
+      | "bool" -> tokenize_helper ((DATATYPE BOOL, pos) :: accum) rest
+      | "Option" -> tokenize_helper ((OPTION, pos) :: accum) rest
+      | "Some" -> tokenize_helper ((SOME, pos) :: accum) rest
+      | "None" -> tokenize_helper ((NONE, pos) :: accum) rest
       (* operations *)
-      | "-" -> tokenize_helper (SUBTRACT :: accum) rest
-      | "==" -> tokenize_helper (EQUALS :: accum) rest
-      | "!=" -> tokenize_helper (NOT_EQUALS :: accum) rest
-      | "<=" -> tokenize_helper (LESS_THAN_EQUALS :: accum) rest
-      | ">=" -> tokenize_helper (GREATER_THAN_EQUALS :: accum) rest
-      | "and" -> tokenize_helper (LOGICAL_AND :: accum) rest
-      | "or" -> tokenize_helper (LOGICAL_OR :: accum) rest
-      | "not" -> tokenize_helper (NOT :: accum) rest
+      | "-" -> tokenize_helper ((SUBTRACT, pos) :: accum) rest
+      | "==" -> tokenize_helper ((EQUALS, pos) :: accum) rest
+      | "!=" -> tokenize_helper ((NOT_EQUALS, pos) :: accum) rest
+      | "<=" -> tokenize_helper ((LESS_THAN_EQUALS, pos) :: accum) rest
+      | ">=" -> tokenize_helper ((GREATER_THAN_EQUALS, pos) :: accum) rest
+      | "and" -> tokenize_helper ((LOGICAL_AND, pos) :: accum) rest
+      | "or" -> tokenize_helper ((LOGICAL_OR, pos) :: accum) rest
+      | "not" -> tokenize_helper ((NOT, pos) :: accum) rest
       | _ -> (
           (* data *)
           match get_token (string_to_char_list word) Empty with
-          | None, [] -> tokenize_helper (UNKNOWN word :: accum) rest
+          | None, [] -> tokenize_helper ((UNKNOWN word, pos) :: accum) rest
           | None, r ->
-              tokenize_helper (UNKNOWN word :: accum)
-                (string_of_char_list r :: rest)
-          | Some t, [] -> tokenize_helper (t :: accum) rest
+              tokenize_helper
+                ((UNKNOWN word, pos) :: accum)
+                ((string_of_char_list r, pos) :: rest)
+          | Some t, [] -> tokenize_helper ((t, pos) :: accum) rest
           | Some t, r ->
-              tokenize_helper (t :: accum) (string_of_char_list r :: rest)))
+              tokenize_helper ((t, pos) :: accum)
+                ((string_of_char_list r, pos) :: rest)))
 
 (* --PUBLIC INTERFACE-- *)
-let tokenize (prog : string) : token list * token list =
-  (* tokenizes input, records errors and returns both results *)
+let tokenize (filename : string) : located_token list * lexer_errors =
+  (* read file content & split based on newline  *)
+  let lines = String.split_on_char '\n' (Io.read_file filename) in
+
+  (* process each line *)
+  let rec process_line (lines : string list) (line_num : int)
+      (accum : located_str list) : located_str list =
+    match lines with
+    | [] -> accum
+    | l :: ls ->
+        (* gather all strings in the line, and add positional information *)
+        let strs = String.split_on_char ' ' l in
+        let located_strs = List.map (fun tok -> (tok, line_num)) strs in
+        process_line ls (line_num + 1) (accum @ located_strs)
+  in
+
   let tokens =
-    String.split_on_char ' ' prog (* split program based on whitespace *)
-    |> List.filter (fun s -> s <> "") (* remove empty strings *)
+    process_line lines 1 []
+    |> List.filter (fun (str, pos) -> str <> "") (* remove empty strings *)
     |> tokenize_helper [] |> List.rev (* tokenize *)
   in
 
   (* accumulate unknown tokens *)
   let errors =
-    List.filter (fun x -> match x with UNKNOWN a -> true | _ -> false) tokens
+    List.filter
+      (fun (x, pos) -> match x with UNKNOWN a -> true | _ -> false)
+      tokens
   in
   (tokens, errors)
