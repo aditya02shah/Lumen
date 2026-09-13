@@ -1,4 +1,4 @@
-(* --type declarations-- *)
+(* --TYPE DECLARATIONS-- *)
 type dtype = INT | BOOL (* supported datatypes *)
 
 type token =
@@ -60,7 +60,7 @@ type accum =
   | Accum of char list * partial_token
   | Empty
 
-(* --helper functions-- *)
+(* --HELPER FUNCTIONS-- *)
 let int_of_char_list chars =
   chars |> List.to_seq |> String.of_seq |> int_of_string
 
@@ -124,6 +124,7 @@ let rec print_list (format_element : 'a -> string) (l : 'a list) : unit =
       print_endline (format_element x);
       print_list format_element xs
 
+(* --LEXER IMPLEMENTATION-- *)
 let merge_partial_token (acc : accum) : token option =
   (* tries to combines partial tokens into a complete token *)
   match acc with
@@ -265,7 +266,7 @@ let rec tokenize_helper (accum : token list) (prog : string list) : token list =
           | Some t, r ->
               tokenize_helper (t :: accum) (string_of_char_list r :: rest)))
 
-(* --main functions-- *)
+(* --PUBLIC INTERFACE-- *)
 let tokenize (prog : string) : token list * token list =
   (* tokenizes input, records errors and returns both results *)
   let tokens =

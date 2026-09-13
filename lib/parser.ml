@@ -1,6 +1,6 @@
 exception Invalid_expr
 
-(* TYPES *)
+(* --TYPE DECLARATIONS-- *)
 
 (* Basic Units *)
 type ident = IDENT of string
@@ -100,7 +100,7 @@ and for_loop = {
 (* Program *)
 type prog = func_decl list
 
-(* helper functions *)
+(* --HELPER FUNCTIONS-- *)
 let rec format_expr expr =
   match expr with
   | INT n -> Printf.sprintf "INT(%d)" n
@@ -131,6 +131,7 @@ let construct_expr (op : Lexer.token) (op1 : expr) (op2 : expr) : expr =
   | POW -> BINARY (POW, op1, op2)
   | _ -> raise Invalid_expr
 
+(* --PARSER IMPLEMENTATION-- *)
 (* Basic Units *)
 let match_value (tokens : Lexer.token list) : value option * Lexer.token list =
   (* value -> IDENTIFIER | INT | BOOLEAN *)
@@ -547,7 +548,7 @@ and match_block (tokens : Lexer.token list) : block option * Lexer.token list =
       (* try to stmt *)
       match match_stmt rem_tokens with
       (* try to match "}" *)
-      | s :: st, R_BRACE :: rem -> (Some (STMTS (s :: st)), rem)
+      | st, R_BRACE :: rem -> (Some (STMTS st), rem)
       | _ -> (None, tokens))
   | _ -> (None, tokens)
 
@@ -584,7 +585,7 @@ and match_loop (tokens : Lexer.token list) : loop option * Lexer.token list =
 
 and for_loop_helper (tokens : Lexer.token list) (init : var_init) :
     loop option * Lexer.token list =
-  (* helps match  cond_expr ";" update_expr ")" block *)
+  (* helps match cond_expr ";" update_expr ")" block *)
 
   (* try to match cond_expr ";" *)
   match match_cond_expr tokens with
@@ -599,6 +600,7 @@ and for_loop_helper (tokens : Lexer.token list) (init : var_init) :
       | _ -> (None, tokens))
   | _ -> (None, tokens)
 
+(* --PUBLIC INTERFACE-- *)
 (* Program *)
 let parse_prog (tokens : Lexer.token list) : prog * Lexer.token list =
   (* prog -> func_decl* *)
