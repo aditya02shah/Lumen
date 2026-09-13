@@ -1,7 +1,7 @@
 (* --TYPE DECLARATIONS-- *)
 type dtype = INT | BOOL (* supported datatypes *)
 
-(* recognised tokens *)
+(* Recognised tokens *)
 type token =
   (* data *)
   | NUMBER of int
@@ -61,7 +61,7 @@ type accum =
   | Accum of char list * partial_token
   | Empty
 
-(* position-aware types *)
+(* Position-aware types *)
 type position = int (* line number *)
 type located_str = string * position (* source strings *)
 type located_token = token * position (* source tokens *)

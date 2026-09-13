@@ -93,11 +93,14 @@ and stmt =
   | VARDECL of var_decl
   | ASST of asst
   | LOOP of loop
-  | IF of block
-  | IF_ELSE of block * block
+  | IF of if_stmt
+  | IF_ELSE of if_stmt * else_stmt
   | RETURN of ret_expr
   | EXP of expr
   | EMPTY
+
+and if_stmt = cond_expr * block
+and else_stmt = block
 
 (* Block *)
 and block = block_node * Lexer.position
@@ -580,15 +583,16 @@ and match_ctrl_flow (tokens : Lexer.located_token list) :
   | (IF, _) :: rem -> (
       (* try to match cond *)
       match match_cond_expr rem with
-      | Some exp, r -> (
+      | Some if_cond, r -> (
           (* try to match block *)
           match match_block r with
           (* try to match "else" block *)
           | Some if_blk, (ELSE, _) :: rem_tok -> (
               match match_block rem_tok with
-              | Some else_blk, rtok -> (Some (IF_ELSE (if_blk, else_blk)), rtok)
+              | Some else_blk, rtok ->
+                  (Some (IF_ELSE ((if_cond, if_blk), else_blk)), rtok)
               | _ -> (None, tokens))
-          | Some if_blk, rem_tok -> (Some (IF if_blk), rem_tok)
+          | Some if_blk, rem_tok -> (Some (IF (if_cond, if_blk)), rem_tok)
           | _ -> (None, tokens))
       | _ -> (None, tokens))
   | _ -> (None, tokens)

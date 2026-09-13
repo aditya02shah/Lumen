@@ -301,8 +301,8 @@ and get_ret_expr_in_blk (func_blk : Parser.block) (include_sub_blocks : bool) :
           (fun acc st ->
             match st with
             | Parser.RETURN re -> acc @ [ re ]
-            | Parser.IF blk -> acc @ get_ret_expr_in_blk blk true
-            | Parser.IF_ELSE (if_blk, else_blk) ->
+            | Parser.IF (cond, blk) -> acc @ get_ret_expr_in_blk blk true
+            | Parser.IF_ELSE ((cond, if_blk), else_blk) ->
                 (acc @ get_ret_expr_in_blk if_blk true)
                 @ get_ret_expr_in_blk else_blk true
             | Parser.LOOP lp -> (
@@ -423,10 +423,10 @@ and check_func_block (block : Parser.block) : semantic_errors =
     | [] -> []
     | s :: st -> (
         match s with
-        | IF blk ->
+        | IF (cond, blk) ->
             (* check sub_block *)
             check_func_block blk @ check_sub_blocks st
-        | IF_ELSE (if_blk, else_blk) ->
+        | IF_ELSE ((cond, if_blk), else_blk) ->
             (* check both sub-blocks *)
             check_func_block if_blk @ check_func_block else_blk
         | LOOP lp -> (
@@ -480,8 +480,9 @@ and check_stmt (stmt : Parser.stmt) : semantic_errors =
   | VARDECL vd -> check_var_decl vd
   | ASST at -> check_asst at false
   | LOOP lp -> check_loop lp
-  | IF blk -> check_block blk
-  | IF_ELSE (if_blk, else_blk) -> check_block if_blk @ check_block else_blk
+  | IF (cond, blk) -> check_cond_expr cond @ check_block blk
+  | IF_ELSE ((cond, if_blk), else_blk) ->
+      check_cond_expr cond @ check_block if_blk @ check_block else_blk
   | RETURN ret_expr -> (
       match ret_expr with
       | EXPR e, _ | SOME_EXPR e, _ -> check_expr e

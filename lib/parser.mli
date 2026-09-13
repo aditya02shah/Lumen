@@ -93,11 +93,14 @@ and stmt =
   | VARDECL of var_decl
   | ASST of asst
   | LOOP of loop
-  | IF of block
-  | IF_ELSE of block * block
+  | IF of if_stmt
+  | IF_ELSE of if_stmt * else_stmt
   | RETURN of ret_expr
   | EXP of expr
   | EMPTY
+
+and if_stmt = cond_expr * block
+and else_stmt = block
 
 (* Block *)
 and block = block_node * Lexer.position
@@ -121,6 +124,7 @@ and for_loop = {
 (* Program *)
 type prog = func_decl list
 
+(* --PARSER IMPLEMENTATION-- *)
 val match_expr :
   Lexer.located_token list -> expr option * Lexer.located_token list
 
@@ -158,5 +162,6 @@ val match_stmt :
 val match_func_decl :
   Lexer.located_token list -> func_decl option * Lexer.located_token list
 
+(* --PUBLIC INTERFACE-- *)
 val parse_prog :
   Lexer.located_token list -> func_decl list * Lexer.located_token list

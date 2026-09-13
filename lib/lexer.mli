@@ -1,7 +1,7 @@
 (* --TYPE DECLARATIONS-- *)
 type dtype = INT | BOOL (* supported datatypes *)
 
-(* recognised tokens *)
+(* Recognised tokens *)
 type token =
   (* data *)
   | NUMBER of int
@@ -55,6 +55,9 @@ type located_str = string * position (* source strings *)
 type located_token = token * position (* source tokens *)
 type lexer_errors = located_token list (* source errors *)
 
-val tokenize : string -> located_token list * lexer_errors
+(* --HELPER FUNCTIONS-- *)
 val print_list : ('a -> string) -> 'a list -> unit
 val format_token : token -> string
+
+(* --PUBLIC INTERFACE-- *)
+val tokenize : string -> located_token list * lexer_errors
