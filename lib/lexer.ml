@@ -182,7 +182,7 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
       | 'f' -> (
           (* "false" *)
           match match_characters rest (string_to_char_list "alse") with
-          | Some remaining -> (Some (BOOLEAN true), remaining)
+          | Some remaining -> (Some (BOOLEAN false), remaining)
           | None -> get_token rest (Accum ([ c ], CHAR)))
       (* words *)
       | 'a' .. 'z' | 'A' .. 'Z' -> get_token rest (Accum ([ c ], CHAR))
