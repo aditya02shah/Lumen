@@ -288,14 +288,36 @@ and check_block (block : Parser.block) : semantic_errors =
 let check_ret_expr (ret_expr : Parser.ret_expr) : semantic_errors =
   match ret_expr with EXPR e | SOME_EXPR e -> check_expr e | NONE -> []
 
-let get_ret_expr_in_blk (func_blk : Parser.block) : Parser.ret_expr list =
+let rec get_ret_expr_in_blk (func_blk : Parser.block)
+    (include_sub_blocks : bool) : Parser.ret_expr list =
   (* returns all the return expressions present in a block *)
-  (* Note: excludes return expression sub-blocks *)
-  match func_blk with
-  | STMTS stmts ->
-      List.fold_left
-        (fun acc st -> match st with Parser.RETURN re -> re :: acc | _ -> acc)
-        [] stmts
+  if include_sub_blocks then
+    (* check all sub-blocks *)
+    match func_blk with
+    | STMTS stmts ->
+        List.fold_left
+          (fun acc st ->
+            match st with
+            | Parser.RETURN re -> acc @ [ re ]
+            | Parser.IF blk -> acc @ get_ret_expr_in_blk blk true
+            | Parser.IF_ELSE (if_blk, else_blk) ->
+                (acc @ get_ret_expr_in_blk if_blk true)
+                @ get_ret_expr_in_blk else_blk true
+            | Parser.LOOP lp -> (
+                match lp with
+                | WHILE lp -> acc @ get_ret_expr_in_blk lp.body true
+                | FOR lp -> acc @ get_ret_expr_in_blk lp.body true)
+            | _ -> acc)
+          [] stmts
+  else
+    (* dont check sub-blocks *)
+    match func_blk with
+    | STMTS stmts ->
+        List.rev
+          (List.fold_left
+             (fun acc st ->
+               match st with Parser.RETURN re -> re :: acc | _ -> acc)
+             [] stmts)
 
 let rec check_func_block (block : Parser.block) : semantic_errors =
   (* check that each block should contain a maximum of 1 return expression *)
@@ -310,9 +332,13 @@ let rec check_func_block (block : Parser.block) : semantic_errors =
         | IF_ELSE (if_blk, else_blk) ->
             (* check both sub-blocks *)
             check_func_block if_blk @ check_func_block else_blk
+        | LOOP lp -> (
+            match lp with
+            | WHILE lp -> check_func_block lp.body
+            | FOR lp -> check_func_block lp.body)
         | _ -> check_sub_blocks st)
   in
-  match get_ret_expr_in_blk block with
+  match get_ret_expr_in_blk block false with
   (* a block can contain upto 1 return expressions *)
   | [] -> ( match block with STMTS stmt -> check_sub_blocks stmt)
   | re :: [] -> ( match block with STMTS stmt -> check_sub_blocks stmt)
@@ -323,6 +349,14 @@ let rec check_func_block (block : Parser.block) : semantic_errors =
       ]
 
 let check_func_decl (func : Parser.func_decl) : semantic_errors =
+  (* store func_decl *)
+  Hashtbl.replace func_env func.func_name
+    {
+      is_optional_type = func.is_optional_type;
+      ret_type = func.return_type;
+      params = func.params;
+    };
+
   (* condition: each block should contain a maximum of 1 return expression (not including sub-blocks) *)
   match check_func_block func.body with
   | [] -> (
@@ -330,52 +364,41 @@ let check_func_decl (func : Parser.func_decl) : semantic_errors =
       match check_block func.body with
       | [] -> (
           (* condition: void function should not contain return expression *)
-          let ret_stmts = get_ret_expr_in_blk func.body in
+          let ret_stmts = get_ret_expr_in_blk func.body true in
           match func.return_type with
-          | DATATYPE d -> (
-              match ret_stmts with
-              | re :: [] -> (
-                  (* check return expression *)
-                  match check_ret_expr re with
-                  | [] -> (
-                      (* condition: return type of function should match the type of the return expression *)
-                      match (re, func.is_optional_type) with
-                      (* condition: optional type return functions should use Some & None *)
-                      | EXPR e, false | SOME_EXPR e, true -> (
-                          match (d, get_expr_type e) with
-                          | INT, Some INT ->
-                              Hashtbl.replace func_env func.func_name
-                                {
-                                  is_optional_type = func.is_optional_type;
-                                  ret_type = func.return_type;
-                                  params = func.params;
-                                };
-                              []
-                          | BOOL, Some BOOL ->
-                              Hashtbl.replace func_env func.func_name
-                                {
-                                  is_optional_type = func.is_optional_type;
-                                  ret_type = func.return_type;
-                                  params = func.params;
-                                };
-                              []
-                          | _, _ ->
-                              [
-                                "Function: contains invalid return expression!";
-                              ])
-                      | NONE, true -> []
-                      | _ ->
-                          [
-                            "Function: cannot use optional type return \
-                             expressions in non-optional function \
-                             declarations!";
-                          ])
-                  | errs -> errs)
-              | _ ->
-                  [
-                    "Function: non-void function contains multiple return \
-                     expressions in the same block!";
-                  ])
+          | DATATYPE d ->
+              (* check each return expression and gather errors *)
+              List.flatten
+                (List.map
+                   (fun re ->
+                     (* check return expression *)
+                     match check_ret_expr re with
+                     | [] -> (
+                         (* condition: return type of function should match the type of the return expression *)
+                         (* condition: optional type return functions should use Some & None *)
+                         match (re, func.is_optional_type) with
+                         | EXPR e, false | SOME_EXPR e, true -> (
+                             match (d, get_expr_type e) with
+                             | INT, Some INT -> []
+                             | BOOL, Some BOOL -> []
+                             | _, _ ->
+                                 [
+                                   "Function: contains invalid return \
+                                    expression!";
+                                 ])
+                         | NONE, true -> []
+                         | _ ->
+                             [
+                               "Function: cannot use optional type return \
+                                expressions in non-optional function \
+                                declarations!";
+                             ])
+                     | _ ->
+                         [
+                           "Function: non-void function contains multiple \
+                            return expressions in the same block!";
+                         ])
+                   ret_stmts)
           | VOID -> (
               match ret_stmts with
               | [] -> []
