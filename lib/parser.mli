@@ -5,7 +5,7 @@ type parser_errors = string list
 
 (* Basic Units *)
 type ident = IDENT of string
-type value_node = IDENTIFIER of ident | NUMBER of int | BOOLEAN of bool
+type value_node = IDENTIFIER of ident | NUMBER of int
 
 type value = value_node * Lexer.position
 

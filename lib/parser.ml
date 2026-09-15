@@ -5,7 +5,7 @@ type parser_errors = string list
 
 (* Basic Units *)
 type ident = IDENT of string
-type value_node = IDENTIFIER of ident | NUMBER of int | BOOLEAN of bool
+type value_node = IDENTIFIER of ident | NUMBER of int
 
 type value = value_node * Lexer.position
 
@@ -165,7 +165,6 @@ let match_value (tokens : Lexer.located_token list) :
   (* --valid paths-- *)
   match tokens with
   | (Lexer.NUMBER n, pos) :: rem -> (Some (NUMBER n, pos), rem, [])
-  | (Lexer.BOOLEAN b, pos) :: rem -> (Some (BOOLEAN b, pos), rem, [])
   | (Lexer.IDENTIFIER i, pos) :: rem ->
       (Some (IDENTIFIER (IDENT i), pos), rem, [])
   (* --invalid paths-- *)
@@ -173,7 +172,7 @@ let match_value (tokens : Lexer.located_token list) :
       ( None,
         tokens,
         [
-          Utils.format_msg pos "Value: expected int, bool or variable. Found "
+          Utils.format_msg pos "Value: expected integer or identifier. Found "
           ^ Lexer.format_token tok ^ "!";
         ] )
   | [] -> (None, tokens, [])
