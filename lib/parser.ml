@@ -172,8 +172,9 @@ let match_value (tokens : Lexer.located_token list) :
       ( None,
         tokens,
         [
-          Utils.format_msg pos "Value: expected integer or identifier. Found "
-          ^ Lexer.format_token tok ^ "!";
+          Utils.format_msg pos
+            (Printf.sprintf "Value: expected integer or identifier. Found %s!"
+               (Lexer.format_token tok));
         ] )
   | [] -> (None, tokens, [])
 
@@ -227,9 +228,10 @@ let rec match_var_decl (tokens : Lexer.located_token list) :
                 tokens,
                 [
                   Utils.format_msg pos
-                    "Variable Declaration: expected ';' or ',' identifier. \
-                     Found "
-                  ^ Lexer.format_token tok ^ "!";
+                    (Printf.sprintf
+                       "Variable Declaration: expected ';' or ',' identifier. \
+                        Found %s!"
+                       (Lexer.format_token tok));
                 ]
                 @ decl_errs )
           | (DATATYPE dtype, pos) :: (tok, _) :: rem
@@ -238,8 +240,9 @@ let rec match_var_decl (tokens : Lexer.located_token list) :
                 tokens,
                 [
                   Utils.format_msg pos
-                    "Variable Declaration: expected identifier. Found "
-                  ^ Lexer.format_token tok ^ "!";
+                    (Printf.sprintf
+                       "Variable Declaration: expected identifier. Found %s!"
+                       (Lexer.format_token tok));
                 ]
                 @ decl_errs )
           | _ -> (None, tokens, decl_errs)))
@@ -298,8 +301,9 @@ and match_var_decl_helper (tokens : Lexer.located_token list)
           tokens,
           [
             Utils.format_msg pos
-              "Variable Declaration: expected identifier. Found "
-            ^ Lexer.format_token tok ^ "!";
+              (Printf.sprintf
+                 "Variable Declaration: expected identifier. Found %s!"
+                 (Lexer.format_token tok));
           ] )
     | _, _ -> (None, tokens, [])
   in
@@ -326,8 +330,9 @@ and match_asst (tokens : Lexer.located_token list) :
       ( None,
         tokens,
         [
-          Utils.format_msg pos "Assignment: expected '='. Found "
-          ^ Lexer.format_token tok ^ "!";
+          Utils.format_msg pos
+            (Printf.sprintf "Assignment: expected '='. Found %s!"
+               (Lexer.format_token tok));
         ] )
   | _ -> (None, tokens, [])
 
@@ -397,8 +402,9 @@ and match_term (tokens : Lexer.located_token list) :
             ( Some left,
               t,
               [
-                Utils.format_msg pos "Expression: invalid operation("
-                ^ Lexer.format_token op ^ ")!";
+                Utils.format_msg pos
+                  (Printf.sprintf "Expression: invalid operation(%s)!"
+                     (Lexer.format_token op));
               ] )
         | [] -> (Some left, t, factor_errs)
       in
@@ -518,8 +524,9 @@ and match_boolval (tokens : Lexer.located_token list) :
           ( None,
             tokens,
             [
-              Utils.format_msg pos "Boolean value: expected ')'. Found "
-              ^ Lexer.format_token tok ^ "!";
+              Utils.format_msg pos
+                (Printf.sprintf "Boolean value: expected ')'. Found %s!"
+                   (Lexer.format_token tok));
             ]
             @ ce_errs )
       | _, _, ce_errs ->
@@ -605,8 +612,9 @@ and match_func_decl (tokens : Lexer.located_token list) :
       ( None,
         tokens,
         [
-          Utils.format_msg pos "Function declaration: expected '('. Found "
-          ^ Lexer.format_token tok ^ "!";
+          Utils.format_msg pos
+            (Printf.sprintf "Function declaration: expected '('. Found %s!"
+               (Lexer.format_token tok));
         ] )
   | (OPTION, pos) :: (Lexer.DATATYPE d, _) :: (tok, _) :: rem
   | (Lexer.DATATYPE d, pos) :: (tok, _) :: rem ->
@@ -614,31 +622,38 @@ and match_func_decl (tokens : Lexer.located_token list) :
         tokens,
         [
           Utils.format_msg pos
-            "Function declaration: expected function name (identifier). Found "
-          ^ Lexer.format_token tok ^ "!";
+            (Printf.sprintf
+               "Function declaration: expected function name (identifier). \
+                Found %s!"
+               (Lexer.format_token tok));
         ] )
   | (OPTION, pos) :: (tok, _) :: rem ->
       ( None,
         tokens,
         [
           Utils.format_msg pos
-            "Function declaration: expected return type (datatype). Found "
-          ^ Lexer.format_token tok ^ "!";
+            (Printf.sprintf
+               "Function declaration: expected return type (datatype). Found \
+                %s!"
+               (Lexer.format_token tok));
         ] )
   | (VOID, pos) :: (IDENTIFIER fname, _) :: (tok, _) :: rem ->
       ( None,
         tokens,
         [
-          Utils.format_msg pos "Function declaration: expected '('. Found "
-          ^ Lexer.format_token tok ^ "!";
+          Utils.format_msg pos
+            (Printf.sprintf "Function declaration: expected '('. Found %s!"
+               (Lexer.format_token tok));
         ] )
   | (VOID, pos) :: (tok, _) :: rem ->
       ( None,
         tokens,
         [
           Utils.format_msg pos
-            "Function declaration: expected function name (identifier). Found "
-          ^ Lexer.format_token tok ^ "!";
+            (Printf.sprintf
+               "Function declaration: expected function name (identifier). \
+                Found %s!"
+               (Lexer.format_token tok));
         ] )
   | _ -> (None, tokens, [])
 
@@ -699,8 +714,9 @@ and match_ret_expr (tokens : Lexer.located_token list) :
       ( None,
         tokens,
         [
-          Utils.format_msg pos "Return expression: expected ';'. Found "
-          ^ Lexer.format_token tok ^ "!";
+          Utils.format_msg pos
+            (Printf.sprintf "Return expression: expected ';'. Found %s!"
+               (Lexer.format_token tok));
         ] )
   (* try to match return Some expr ";"  *)
   | (RETURN, pos) :: (SOME, _) :: rem -> (
@@ -712,8 +728,9 @@ and match_ret_expr (tokens : Lexer.located_token list) :
           ( None,
             tokens,
             [
-              Utils.format_msg pos "Return expression: expected ';'. Found "
-              ^ Lexer.format_token tok ^ "!";
+              Utils.format_msg pos
+                (Printf.sprintf "Return expression: expected ';'. Found %s!"
+                   (Lexer.format_token tok));
             ]
             @ exp_errs )
       | _, _, exp_errs ->
@@ -734,8 +751,9 @@ and match_ret_expr (tokens : Lexer.located_token list) :
           ( None,
             tokens,
             [
-              Utils.format_msg pos "Return expression: expected ';'. Found "
-              ^ Lexer.format_token tok ^ "!";
+              Utils.format_msg pos
+                (Printf.sprintf "Return expression: expected ';'. Found %s!"
+                   (Lexer.format_token tok));
             ]
             @ exp_errs )
       | _, _, exp_errs ->
@@ -766,16 +784,20 @@ and match_param_list (tokens : Lexer.located_token list) :
               t,
               [
                 Utils.format_msg pos
-                  "Parameter list: expected parameter name (identifier). Found "
-                ^ Lexer.format_token tok ^ "!";
+                  (Printf.sprintf
+                     "Parameter list: expected parameter name (identifier). \
+                      Found %s!"
+                     (Lexer.format_token tok));
               ] )
         | (COMMA, pos) :: (tok, _) :: r ->
             ( List.rev accum,
               t,
               [
                 Utils.format_msg pos
-                  "Parameter list: expected parameter type (datatype). Found "
-                ^ Lexer.format_token tok ^ "!";
+                  (Printf.sprintf
+                     "Parameter list: expected parameter type (datatype). \
+                      Found %s!"
+                     (Lexer.format_token tok));
               ] )
         | _ -> (List.rev accum, t, [])
       in
@@ -786,16 +808,18 @@ and match_param_list (tokens : Lexer.located_token list) :
         tokens,
         [
           Utils.format_msg pos
-            "Parameter list: expected parameter name (identifier). Found "
-          ^ Lexer.format_token tok ^ "!";
+            (Printf.sprintf
+               "Parameter list: expected parameter name (identifier). Found %s!"
+               (Lexer.format_token tok));
         ] )
   | (tok, pos) :: rem ->
       ( [],
         tokens,
         [
           Utils.format_msg pos
-            "Parameter list: expected parameter type (datatype). Found "
-          ^ Lexer.format_token tok ^ "!";
+            (Printf.sprintf
+               "Parameter list: expected parameter type (datatype). Found %s!"
+               (Lexer.format_token tok));
         ] )
   | _ -> ([], tokens, [])
 
@@ -817,8 +841,9 @@ and match_func_call (tokens : Lexer.located_token list) (pos : Lexer.position) :
           ( None,
             tokens,
             [
-              Utils.format_msg p "Function call: expected ')'. Found! "
-              ^ Lexer.format_token tok ^ "!";
+              Utils.format_msg p
+                (Printf.sprintf "Function call: expected ')'. Found! %s!"
+                   (Lexer.format_token tok));
             ] )
       | _, _, arg_errs ->
           ( None,
@@ -833,16 +858,18 @@ and match_func_call (tokens : Lexer.located_token list) (pos : Lexer.position) :
       ( None,
         tokens,
         [
-          Utils.format_msg p "Function call: expected '('. Found! "
-          ^ Lexer.format_token tok ^ "!";
+          Utils.format_msg p
+            (Printf.sprintf "Function call: expected '('. Found! %s!"
+               (Lexer.format_token tok));
         ] )
   | (tok, p) :: rem ->
       ( None,
         tokens,
         [
           Utils.format_msg p
-            "Function call: expected function name (identifier). Found! "
-          ^ Lexer.format_token tok ^ "!";
+            (Printf.sprintf
+               "Function call: expected function name (identifier). Found! %s!"
+               (Lexer.format_token tok));
         ] )
   | [] ->
       (None, tokens, [ Utils.format_msg pos "Function call: invalid syntax!" ])
@@ -870,8 +897,9 @@ and match_arg_list (tokens : Lexer.located_token list) (pos : Lexer.position) :
               t,
               [
                 Utils.format_msg p
-                  "Argument list: expected ',' expression. Found "
-                ^ Lexer.format_token tok ^ "!";
+                  (Printf.sprintf
+                     "Argument list: expected ',' expression. Found %s!"
+                     (Lexer.format_token tok));
               ]
               @ exp1_errs )
         | _ -> (Some (List.rev accum), t, exp1_errs)
@@ -881,8 +909,9 @@ and match_arg_list (tokens : Lexer.located_token list) (pos : Lexer.position) :
       ( Some [],
         tokens,
         [
-          Utils.format_msg p "Argument list: expected expression. Found "
-          ^ Lexer.format_token tok ^ "!";
+          Utils.format_msg p
+            (Printf.sprintf "Argument list: expected expression. Found %s!"
+               (Lexer.format_token tok));
         ]
         @ exp_errs )
       (* empty arglist *)
@@ -932,8 +961,9 @@ and match_stmt_helper (tokens : Lexer.located_token list) :
                   ( None,
                     tokens,
                     [
-                      Utils.format_msg pos "Expression: expected ';'. Found "
-                      ^ Lexer.format_token tok ^ "!";
+                      Utils.format_msg pos
+                        (Printf.sprintf "Expression: expected ';'. Found %s!"
+                           (Lexer.format_token tok));
                     ]
                     @ exp_errs )
               | _, _, exp_errs -> (
@@ -1067,8 +1097,9 @@ and match_loop (tokens : Lexer.located_token list) :
       ( None,
         tokens,
         [
-          Utils.format_msg pos "For loop: expected '('. Found "
-          ^ Lexer.format_token tok ^ "!";
+          Utils.format_msg pos
+            (Printf.sprintf "For loop: expected '('. Found %s!"
+               (Lexer.format_token tok));
         ] )
   | _ -> (None, tokens, [])
 
@@ -1100,8 +1131,9 @@ and for_loop_helper (tokens : Lexer.located_token list) (init : var_init) :
           ( None,
             tokens,
             [
-              Utils.format_msg pos "For loop: expected ')'. Found "
-              ^ Lexer.format_token tok ^ "!";
+              Utils.format_msg pos
+                (Printf.sprintf "For loop: expected ')'. Found %s!"
+                   (Lexer.format_token tok));
             ]
             @ upd_errs )
       | None, _, upd_errs ->
@@ -1115,8 +1147,9 @@ and for_loop_helper (tokens : Lexer.located_token list) (init : var_init) :
       ( None,
         tokens,
         [
-          Utils.format_msg pos "For loop: expected ';'. Found "
-          ^ Lexer.format_token tok ^ "!";
+          Utils.format_msg pos
+            (Printf.sprintf "For loop: expected ';'. Found %s!"
+               (Lexer.format_token tok));
         ]
         @ errs )
   | _, _, errs -> (None, tokens, errs)
