@@ -1,6 +1,7 @@
 exception Invalid_expr
 
 (* --TYPE DECLARATIONS-- *)
+type parser_errors = string list
 
 (* Basic Units *)
 type ident = IDENT of string
@@ -126,42 +127,56 @@ type prog = func_decl list
 
 (* --PARSER IMPLEMENTATION-- *)
 val match_expr :
-  Lexer.located_token list -> expr option * Lexer.located_token list
+  Lexer.located_token list ->
+  expr option * Lexer.located_token list * parser_errors
 
 val format_expr : expr -> string
 
 val match_cond_expr :
-  Lexer.located_token list -> cond_expr option * Lexer.located_token list
+  Lexer.located_token list ->
+  cond_expr option * Lexer.located_token list * parser_errors
 
 val match_var_decl :
-  Lexer.located_token list -> var_decl option * Lexer.located_token list
+  Lexer.located_token list ->
+  var_decl option * Lexer.located_token list * parser_errors
 
 val match_asst :
-  Lexer.located_token list -> asst option * Lexer.located_token list
+  Lexer.located_token list ->
+  asst option * Lexer.located_token list * parser_errors
 
 val format_asst : asst option -> string
 
 val match_arg_list :
-  Lexer.located_token list -> arg_list option * Lexer.located_token list
+  Lexer.located_token list ->
+  Lexer.position ->
+  arg_list option * Lexer.located_token list * parser_errors
 
 val match_param_list :
-  Lexer.located_token list -> param_list * Lexer.located_token list
+  Lexer.located_token list ->
+  param_list * Lexer.located_token list * parser_errors
 
 val match_func_call :
-  Lexer.located_token list -> func_call option * Lexer.located_token list
+  Lexer.located_token list ->
+  Lexer.position ->
+  func_call option * Lexer.located_token list * parser_errors
 
 val match_loop :
-  Lexer.located_token list -> loop option * Lexer.located_token list
+  Lexer.located_token list ->
+  loop option * Lexer.located_token list * parser_errors
 
 val match_block :
-  Lexer.located_token list -> block option * Lexer.located_token list
+  Lexer.located_token list ->
+  block option * Lexer.located_token list * parser_errors
 
 val match_stmt :
-  Lexer.located_token list -> stmt list * Lexer.located_token list
+  Lexer.located_token list ->
+  stmt list * Lexer.located_token list * parser_errors
 
 val match_func_decl :
-  Lexer.located_token list -> func_decl option * Lexer.located_token list
+  Lexer.located_token list ->
+  func_decl option * Lexer.located_token list * parser_errors
 
 (* --PUBLIC INTERFACE-- *)
 val parse_prog :
-  Lexer.located_token list -> func_decl list * Lexer.located_token list
+  Lexer.located_token list ->
+  func_decl list * Lexer.located_token list * parser_errors
