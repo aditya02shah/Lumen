@@ -48,6 +48,7 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
   (* condition: var must be defined *)
   match asst with
   | at, pos -> (
+      let var_name = match at.name with IDENT vname -> vname in
       match Hashtbl.find_opt var_env at.name with
       | Some ent ->
           if
@@ -72,10 +73,14 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
           else
             [
               Utils.format_msg pos
-                "Assignment: cannot assign value to immutable variable!";
+                "Assignment: cannot assign value to immutable variable "
+              ^ var_name ^ "!";
             ]
-      | _ -> [ Utils.format_msg pos "Assignment: contains undefined variable!" ]
-      )
+      | _ ->
+          [
+            Utils.format_msg pos "Assignment: contains undefined variable "
+            ^ var_name ^ "!";
+          ])
 
 (* Expression *)
 and check_expr (expr : Parser.expr) : semantic_errors =

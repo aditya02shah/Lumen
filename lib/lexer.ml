@@ -77,25 +77,25 @@ let string_to_char_list str = List.init (String.length str) (String.get str)
 let format_token (t : token) : string =
   match t with
   (* data *)
-  | NUMBER n -> "NUMBER " ^ string_of_int n
-  | BOOLEAN b -> if b = true then "TRUE" else "FALSE"
-  | IDENTIFIER x -> "IDENTIFIER: " ^ x
+  | NUMBER n -> "Int literal " ^ string_of_int n
+  | BOOLEAN b -> if b = true then "'true'" else "'false''"
+  | IDENTIFIER x -> "identifier: " ^ x
   (* keywords *)
-  | FOR -> "FOR"
-  | WHILE -> "WHILE"
-  | RETURN -> "RETURN"
-  | MUT -> "MUT"
-  | IF -> "IF"
-  | ELSE -> "ELSE"
+  | FOR -> "'for'"
+  | WHILE -> "'while"
+  | RETURN -> "'return'"
+  | MUT -> "mut'"
+  | IF -> "if'"
+  | ELSE -> "else'"
   (* syntax *)
   | DATATYPE d -> (
-      match d with INT -> "DATATYPE: INT" | BOOL -> "DATATYPE: BOOL")
-  | VOID -> "VOID"
-  | OPTION -> "'OPTION'"
-  | SOME -> "'SOME'"
-  | NONE -> "'NONE'"
+      match d with INT -> "dtype('Int')" | BOOL -> "dtype('Bool')")
+  | VOID -> "'void'"
+  | OPTION -> "'option'"
+  | SOME -> "'some'"
+  | NONE -> "'none'"
   | ASSIGNMENT -> "'='"
-  | WHITESPACE -> "WHITESPACE"
+  | WHITESPACE -> "whitespace"
   | SEMICOLON -> "';'"
   | L_PAREN -> "'('"
   | R_PAREN -> "')'"
@@ -111,16 +111,16 @@ let format_token (t : token) : string =
   | DIVIDE -> "'/'"
   | MOD -> "'%'"
   | POW -> "'^'"
-  | INCREMENT -> "'INCREMENT'"
+  | INCREMENT -> "'++'"
   | EQUALS -> "'=='"
   | NOT_EQUALS -> "!="
   | LESS_THAN -> "'<'"
   | LESS_THAN_EQUALS -> "'<="
   | GREATER_THAN_EQUALS -> "'>="
   | GREATER_THAN -> "'>'"
-  | LOGICAL_AND -> "AND"
-  | LOGICAL_OR -> "OR"
-  | NOT -> "NOT"
+  | LOGICAL_AND -> "and"
+  | LOGICAL_OR -> "or"
+  | NOT -> "not"
   | UNKNOWN x -> "<UNK ='" ^ x ^ "'>"
 
 let rec print_list (format_element : 'a -> string) (l : 'a list) : unit =
