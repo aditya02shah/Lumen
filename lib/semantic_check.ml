@@ -16,10 +16,6 @@ type func_details = {
 let var_env = Hashtbl.create 100 (* maps var -> var_details *)
 let func_env = Hashtbl.create 100 (* maps func -> func_details *)
 
-(* --HELPER FUNCTIONS-- *)
-let format_msg (pos : Lexer.position) (msg : string) : string =
-  "Line (" ^ string_of_int pos ^ ") - " ^ msg
-
 (* --SEMANTIC CHECKER IMPLEMENTATION-- *)
 (* Variables *)
 (* variable declaration *)
@@ -66,19 +62,20 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
                 | BOOL, Some BOOL -> []
                 | _ ->
                     [
-                      format_msg pos
+                      Utils.format_msg pos
                         "Assignment: variable type and expression type do not \
                          match!";
                     ])
             | errs ->
-                format_msg pos "Assignment: contains invalid expression!"
+                Utils.format_msg pos "Assignment: contains invalid expression!"
                 :: errs
           else
             [
-              format_msg pos
+              Utils.format_msg pos
                 "Assignment: cannot assign value to immutable variable!";
             ]
-      | _ -> [ format_msg pos "Assignment: contains undefined variable!" ])
+      | _ -> [ Utils.format_msg pos "Assignment: contains undefined variable!" ]
+      )
 
 (* Expression *)
 and check_expr (expr : Parser.expr) : semantic_errors =
@@ -90,7 +87,9 @@ and check_expr (expr : Parser.expr) : semantic_errors =
           match ent.assigned_val with
           | EXPR e -> []
           | NONE ->
-              [ format_msg pos "Expression: contains unassigned variable!" ])
+              [
+                Utils.format_msg pos "Expression: contains unassigned variable!";
+              ])
       | _ -> [ "Expression: contains undefined variable!" ])
   (* check increment *)
   | INCREMENT var, pos -> (
@@ -107,19 +106,22 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                   | INT -> []
                   | _ ->
                       [
-                        format_msg pos
+                        Utils.format_msg pos
                           "Expression: Increment operation requires an integer \
                            variable!";
                       ])
               | NONE ->
-                  [ format_msg pos "Expression: contains unassigned variable!" ]
-              )
+                  [
+                    Utils.format_msg pos
+                      "Expression: contains unassigned variable!";
+                  ])
           | false ->
               [
-                format_msg pos
+                Utils.format_msg pos
                   "Expression: cannot increment immutable variable!";
               ])
-      | _ -> [ format_msg pos "Expression: contains undefined variable!" ])
+      | _ -> [ Utils.format_msg pos "Expression: contains undefined variable!" ]
+      )
   (* check conditional expression *)
   | COND ce, _ -> check_cond_expr ce
   (* check function call *)
@@ -142,16 +144,19 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                   | INT, INT -> []
                   | _, _ ->
                       [
-                        format_msg pos
+                        Utils.format_msg pos
                           "Expression: arithmetic expression cannot compare \
                            non-boolean types or variables of different types !";
                       ])
               | _ ->
                   [
-                    format_msg pos "Expression: contains unassigned variables!";
+                    Utils.format_msg pos
+                      "Expression: contains unassigned variables!";
                   ])
           | _, _ ->
-              [ format_msg pos "Expression: contains undefined variables!" ])
+              [
+                Utils.format_msg pos "Expression: contains undefined variables!";
+              ])
       | (VAR var, pos), e | e, (VAR var, pos) -> (
           (* check whether var is defined *)
           match Hashtbl.find_opt var_env var with
@@ -162,15 +167,16 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                   match ent.dtype with
                   | INT -> check_expr e
                   | _ ->
-                      format_msg pos
+                      Utils.format_msg pos
                         "Expression: arithmetic expressions requires integer \
                          operands!"
                       :: check_expr e)
               | NONE ->
-                  format_msg pos "Expression: contains unassigned variables!"
+                  Utils.format_msg pos
+                    "Expression: contains unassigned variables!"
                   :: check_expr e)
           | _ ->
-              format_msg pos "Expression: contains undefined variable!"
+              Utils.format_msg pos "Expression: contains undefined variable!"
               :: check_expr e)
       (* check func_call *)
       | (FUNC_CALL (f, _), pos), e | e, (FUNC_CALL (f, _), pos) -> (
@@ -182,17 +188,17 @@ and check_expr (expr : Parser.expr) : semantic_errors =
               match ent.ret_type with
               | DATATYPE INT, _ -> []
               | _ ->
-                  format_msg pos
+                  Utils.format_msg pos
                     "Expression: non-integer functions cannot be used in \
                      arithmetic expressions!"
                   :: check_expr e)
           | _ ->
-              format_msg pos
+              Utils.format_msg pos
                 "Expression: undefined function used in expression! "
               :: check_expr e)
       | (COND ce, pos), _ | _, (COND ce, pos) ->
           [
-            format_msg pos
+            Utils.format_msg pos
               "Expression: arithmetic expressions cannot be performed on \
                conditional expressions!";
           ]
@@ -216,7 +222,7 @@ and check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
               match ent.assigned_val with
               | NONE ->
                   [
-                    format_msg pos
+                    Utils.format_msg pos
                       "Conditional Expression: comparing unassigned variables!";
                   ]
               | _ -> (
@@ -224,13 +230,13 @@ and check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
                   | INT -> []
                   | _ ->
                       [
-                        format_msg pos
+                        Utils.format_msg pos
                           "Conditional Expression: comparison requires integer \
                            operands!";
                       ]))
           | _ ->
               [
-                format_msg pos
+                Utils.format_msg pos
                   "Conditional Expression: comparing undefined variable!";
               ])
       | (IDENTIFIER var1, pos), (IDENTIFIER var2, _) -> (
@@ -248,23 +254,23 @@ and check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
                   | INT, INT -> []
                   | _, _ ->
                       [
-                        format_msg pos
+                        Utils.format_msg pos
                           "Conditional Expression: cannot compare values of \
                            different types!";
                       ])
               | _ ->
                   [
-                    format_msg pos
+                    Utils.format_msg pos
                       "Conditional Expression: comparing unassigned variables!";
                   ])
           | _ ->
               [
-                format_msg pos
+                Utils.format_msg pos
                   "Conditional Expression: comparing undefined variables!";
               ])
       | _ ->
           [
-            format_msg pos
+            Utils.format_msg pos
               "Conditional Expression: comparing undefined variables!";
           ])
   | COMBINATION ((cm, ce1, ce2), _) -> check_cond_expr ce1 @ check_cond_expr ce2
@@ -367,21 +373,21 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
                                  | BOOL, Some BOOL -> []
                                  | _, _ ->
                                      [
-                                       format_msg e_pos
+                                       Utils.format_msg e_pos
                                          "Function: contains invalid return \
                                           expression!";
                                      ])
                              | (NONE, e_pos), true -> []
                              | (_, e_pos), _ ->
                                  [
-                                   format_msg e_pos
+                                   Utils.format_msg e_pos
                                      "Function: cannot use optional type \
                                       return expressions in non-optional \
                                       function declarations!";
                                  ])
                          | _ ->
                              [
-                               format_msg f_pos
+                               Utils.format_msg f_pos
                                  "Function: non-void function contains \
                                   multiple return expressions in the same \
                                   block!";
@@ -393,7 +399,7 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
                   | [] -> []
                   | _ ->
                       [
-                        format_msg f_pos
+                        Utils.format_msg f_pos
                           "Function: void function cannot return value!";
                       ]))
           | es -> es)
@@ -414,7 +420,8 @@ and check_func_call (func_call : Parser.func_call) : semantic_errors =
           (* compare parameters with arguments *)
           | [] -> compare_params_with_args ent.params func.args pos
           | errors -> errors)
-      | None -> [ format_msg pos "Function Call: call to undefined function!" ])
+      | None ->
+          [ Utils.format_msg pos "Function Call: call to undefined function!" ])
 
 and check_func_block (block : Parser.block) : semantic_errors =
   (* condition: each block should contain a maximum of 1 return expression *)
@@ -444,7 +451,7 @@ and check_func_block (block : Parser.block) : semantic_errors =
       | re :: [] -> ( match block with STMTS stmt, _ -> check_sub_blocks stmt)
       | _ ->
           [
-            format_msg pos
+            Utils.format_msg pos
               "Function: each block inside function cannot contain more than 1 \
                return expression ";
           ])
@@ -461,14 +468,14 @@ and compare_params_with_args (params : Parser.param_list)
       | BOOL, Some BOOL -> []
       | _, _ ->
           [
-            format_msg pos
+            Utils.format_msg pos
               "Function Call: argument type doesn't match parameter type!";
           ])
   | [], [] -> []
   (* condition: argument count must match parameter count *)
   | _ ->
       [
-        format_msg pos
+        Utils.format_msg pos
           "Function Call: argument count must match parameter count in \
            function call!";
       ]

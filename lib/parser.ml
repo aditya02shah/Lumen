@@ -156,9 +156,6 @@ let construct_expr (op : Lexer.located_token) (op1 : expr) (op2 : expr) : expr =
   | POW, pos -> (BINARY (POW, op1, op2), pos)
   | _ -> raise Invalid_expr
 
-let format_msg (pos : Lexer.position) (msg : string) : string =
-  "Line (" ^ string_of_int pos ^ ") - " ^ msg
-
 (* --PARSER IMPLEMENTATION-- *)
 (* Basic Units *)
 let match_value (tokens : Lexer.located_token list) :
@@ -176,7 +173,7 @@ let match_value (tokens : Lexer.located_token list) :
       ( None,
         tokens,
         [
-          format_msg pos "Value: expected int, bool or variable. Found  "
+          Utils.format_msg pos "Value: expected int, bool or variable. Found  "
           ^ Lexer.format_token tok ^ "!";
         ] )
   | [] -> (None, tokens, [])
@@ -224,7 +221,7 @@ let rec match_var_decl (tokens : Lexer.located_token list) :
       ( None,
         tokens,
         [
-          format_msg pos "Variable Declaration: expected ','. Found  "
+          Utils.format_msg pos "Variable Declaration: expected ','. Found  "
           ^ Lexer.format_token tok ^ "!";
         ] )
   | (DATATYPE dtype, pos) :: (tok, _) :: rem
@@ -232,7 +229,8 @@ let rec match_var_decl (tokens : Lexer.located_token list) :
       ( None,
         tokens,
         [
-          format_msg pos "Variable Declaration: expected identifier. Found  "
+          Utils.format_msg pos
+            "Variable Declaration: expected identifier. Found  "
           ^ Lexer.format_token tok ^ "!";
         ] )
   | _ -> (
@@ -256,7 +254,7 @@ and match_var_decl_asst (tokens : Lexer.located_token list) :
           (* --invalid path-- *)
           ( None,
             tokens,
-            [ format_msg pos "Variable Declaration: invalid assignment!" ]
+            [ Utils.format_msg pos "Variable Declaration: invalid assignment!" ]
             @ asst_errs ))
   (* mutable decl *)
   | (MUT, pos) :: (DATATYPE dtype, _) :: rem -> (
@@ -267,18 +265,18 @@ and match_var_decl_asst (tokens : Lexer.located_token list) :
           (* --invalid path-- *)
           ( None,
             tokens,
-            [ format_msg pos "Variable Declaration: invalid assignment!" ]
+            [ Utils.format_msg pos "Variable Declaration: invalid assignment!" ]
             @ asst_errs ))
   (* --invalid paths-- *)
   | (MUT, pos) :: rem ->
       ( None,
         tokens,
-        [ format_msg pos "Variable Declaration: invalid declaration!" ] )
+        [ Utils.format_msg pos "Variable Declaration: invalid declaration!" ] )
   | (tok, pos) :: rem ->
       ( None,
         tokens,
         [
-          format_msg pos
+          Utils.format_msg pos
             "Variable Declaration: expected 'mut' or 'int' or 'bool. Found  "
           ^ Lexer.format_token tok ^ "!";
         ] )
@@ -302,7 +300,8 @@ and match_var_decl_helper (tokens : Lexer.located_token list)
         ( None,
           tokens,
           [
-            format_msg pos "Variable Declaration: expected identifier. Found  "
+            Utils.format_msg pos
+              "Variable Declaration: expected identifier. Found  "
             ^ Lexer.format_token tok ^ "!";
           ] )
     | _, _ -> (None, tokens, [])
@@ -323,13 +322,14 @@ and match_asst (tokens : Lexer.located_token list) :
       | _, _, exp_errs ->
           ( None,
             tokens,
-            [ format_msg pos "Assignment: invalid expression!" ] @ exp_errs ))
+            [ Utils.format_msg pos "Assignment: invalid expression!" ]
+            @ exp_errs ))
   (* --invalid paths-- *)
   | (IDENTIFIER name, pos) :: (tok, _) :: _ ->
       ( None,
         tokens,
         [
-          format_msg pos "Assignment: expected '='. Found "
+          Utils.format_msg pos "Assignment: expected '='. Found "
           ^ Lexer.format_token tok ^ "!";
         ] )
   | _ -> (None, tokens, [])
@@ -394,12 +394,13 @@ and match_term (tokens : Lexer.located_token list) :
             | _, _, f_errs ->
                 ( Some left,
                   t,
-                  [ format_msg pos "Expression: invalid factor!" ] @ f_errs ))
+                  [ Utils.format_msg pos "Expression: invalid factor!" ]
+                  @ f_errs ))
         | (op, pos) :: r ->
             ( Some left,
               t,
               [
-                format_msg pos "Expression: invalid operation("
+                Utils.format_msg pos "Expression: invalid operation("
                 ^ Lexer.format_token op ^ ")!";
               ] )
         | [] -> (Some left, t, factor_errs)
@@ -422,8 +423,8 @@ and match_factor (tokens : Lexer.located_token list) :
       | _, _, fcall_errs ->
           ( None,
             tokens,
-            [ format_msg pos "Expression: invalid function call!" ] @ fcall_errs
-          ))
+            [ Utils.format_msg pos "Expression: invalid function call!" ]
+            @ fcall_errs ))
   (* try to match an identifier *)
   | (IDENTIFIER i, pos) :: rem -> (Some (VAR (IDENT i), pos), rem, [])
   (* try to match a number *)
@@ -437,8 +438,8 @@ and match_factor (tokens : Lexer.located_token list) :
       | _, _, exp_errs ->
           ( None,
             tokens,
-            [ format_msg pos "Expression: invalid sub-expression!" ] @ exp_errs
-          ))
+            [ Utils.format_msg pos "Expression: invalid sub-expression!" ]
+            @ exp_errs ))
   (* --invalid paths-- *)
   | _ -> (None, tokens, [])
 
@@ -463,7 +464,7 @@ and match_cond_expr (tokens : Lexer.located_token list) :
                 ( None,
                   t,
                   [
-                    format_msg pos
+                    Utils.format_msg pos
                       "Conditional Expression: invalid boolean value after AND!";
                   ]
                   @ bv_errs ))
@@ -475,7 +476,7 @@ and match_cond_expr (tokens : Lexer.located_token list) :
                 ( None,
                   t,
                   [
-                    format_msg pos
+                    Utils.format_msg pos
                       "Conditional Expression: invalid boolean value after OR!";
                   ]
                   @ bv_errs ))
@@ -514,19 +515,22 @@ and match_valcmp (tokens : Lexer.located_token list) (pos : Lexer.position) :
           | None, _, val2_errs ->
               ( None,
                 tokens,
-                [ format_msg p "Value comparison: second operand is invalid!!" ]
+                [
+                  Utils.format_msg p
+                    "Value comparison: second operand is invalid!!";
+                ]
                 @ val2_errs @ val1_errs ))
       (* --invalid path-- *)
       | None ->
           ( None,
             tokens,
-            [ format_msg p "Value comparison: invalid operation!" ] @ val1_errs
-          ))
+            [ Utils.format_msg p "Value comparison: invalid operation!" ]
+            @ val1_errs ))
   (* --invalid path-- *)
   | _, _, val_errs ->
       ( None,
         tokens,
-        [ format_msg pos "Value comparison: first operand is invalid!" ]
+        [ Utils.format_msg pos "Value comparison: first operand is invalid!" ]
         @ val_errs )
 
 and match_boolval (tokens : Lexer.located_token list) :
@@ -552,7 +556,10 @@ and match_boolval (tokens : Lexer.located_token list) :
       | _, _, ce_errs ->
           ( None,
             tokens,
-            [ format_msg pos "Boolean value: invalid conditional expression!" ]
+            [
+              Utils.format_msg pos
+                "Boolean value: invalid conditional expression!";
+            ]
             @ ce_errs ))
   (* try to match val logical_compare val *)
   | (token, pos) :: rem -> match_valcmp tokens pos
@@ -586,7 +593,7 @@ and match_func_decl (tokens : Lexer.located_token list) :
       ( None,
         tokens,
         [
-          format_msg pos "Function declaration: expected '('. Found  "
+          Utils.format_msg pos "Function declaration: expected '('. Found  "
           ^ Lexer.format_token tok ^ "!";
         ] )
   | (OPTION, pos) :: (Lexer.DATATYPE d, _) :: (tok, _) :: rem
@@ -594,28 +601,31 @@ and match_func_decl (tokens : Lexer.located_token list) :
       ( None,
         tokens,
         [
-          format_msg pos "Function declaration: expected function name. Found  "
+          Utils.format_msg pos
+            "Function declaration: expected function name. Found  "
           ^ Lexer.format_token tok ^ "!";
         ] )
   | (OPTION, pos) :: (tok, _) :: rem ->
       ( None,
         tokens,
         [
-          format_msg pos "Function declaration: expected return type. Found  "
+          Utils.format_msg pos
+            "Function declaration: expected return type. Found  "
           ^ Lexer.format_token tok ^ "!";
         ] )
   | (VOID, pos) :: (IDENTIFIER fname, _) :: (tok, _) :: rem ->
       ( None,
         tokens,
         [
-          format_msg pos "Function declaration: expected '('. Found  "
+          Utils.format_msg pos "Function declaration: expected '('. Found  "
           ^ Lexer.format_token tok ^ "!";
         ] )
   | (VOID, pos) :: (tok, _) :: rem ->
       ( None,
         tokens,
         [
-          format_msg pos "Function declaration: expected function name. Found  "
+          Utils.format_msg pos
+            "Function declaration: expected function name. Found  "
           ^ Lexer.format_token tok ^ "!";
         ] )
   | _ -> (None, tokens, [])
@@ -645,12 +655,12 @@ and match_func_decl_helper (tokens : Lexer.located_token list) (ret : ret_type)
       | _, _, blk_errs ->
           ( None,
             tokens,
-            [ format_msg p "Function declaration: invalid block!" ] @ blk_errs
-          ))
+            [ Utils.format_msg p "Function declaration: invalid block!" ]
+            @ blk_errs ))
   | _, _, param_errs ->
       ( None,
         tokens,
-        [ format_msg pos "Function declaration: invalid parameter list!" ]
+        [ Utils.format_msg pos "Function declaration: invalid parameter list!" ]
         @ param_errs )
 
 and match_ret_expr (tokens : Lexer.located_token list) :
@@ -667,7 +677,7 @@ and match_ret_expr (tokens : Lexer.located_token list) :
       ( None,
         tokens,
         [
-          format_msg pos "Return expression: expected ';'. Found  "
+          Utils.format_msg pos "Return expression: expected ';'. Found  "
           ^ Lexer.format_token tok ^ "!";
         ] )
   (* try to match return Some expr ";"  *)
@@ -680,14 +690,14 @@ and match_ret_expr (tokens : Lexer.located_token list) :
           ( None,
             tokens,
             [
-              format_msg pos "Return expression: expected ';'. Found  "
+              Utils.format_msg pos "Return expression: expected ';'. Found  "
               ^ Lexer.format_token tok ^ "!";
             ]
             @ exp_errs )
       | _, _, exp_errs ->
           ( None,
             tokens,
-            [ format_msg pos "Return expression: invalid expression!" ]
+            [ Utils.format_msg pos "Return expression: invalid expression!" ]
             @ exp_errs ))
   (* try to match return expr ";" *)
   | (RETURN, pos) :: rem -> (
@@ -699,20 +709,20 @@ and match_ret_expr (tokens : Lexer.located_token list) :
           ( None,
             tokens,
             [
-              format_msg pos "Return expression: expected ';'. Found  "
+              Utils.format_msg pos "Return expression: expected ';'. Found  "
               ^ Lexer.format_token tok ^ "!";
             ]
             @ exp_errs )
       | _, _, exp_errs ->
           ( None,
             tokens,
-            [ format_msg pos "Return expression: invalid expression!" ]
+            [ Utils.format_msg pos "Return expression: invalid expression!" ]
             @ exp_errs ))
   | (tok, pos) :: rem ->
       ( None,
         tokens,
         [
-          format_msg pos "Expected 'return' expression. Found "
+          Utils.format_msg pos "Expected 'return' expression. Found "
           ^ Lexer.format_token tok ^ "!";
         ] )
   | _ -> (None, tokens, [])
@@ -736,7 +746,7 @@ and match_param_list (tokens : Lexer.located_token list) :
             ( List.rev accum,
               t,
               [
-                format_msg pos
+                Utils.format_msg pos
                   "Parameter list: expected parameter name. Found  "
                 ^ Lexer.format_token tok ^ "!";
               ] )
@@ -744,7 +754,7 @@ and match_param_list (tokens : Lexer.located_token list) :
             ( List.rev accum,
               t,
               [
-                format_msg pos
+                Utils.format_msg pos
                   "Parameter list: expected parameter type. Found  "
                 ^ Lexer.format_token tok ^ "!";
               ] )
@@ -756,14 +766,16 @@ and match_param_list (tokens : Lexer.located_token list) :
       ( [],
         tokens,
         [
-          format_msg pos "Parameter list: expected parameter name. Found  "
+          Utils.format_msg pos
+            "Parameter list: expected parameter name. Found  "
           ^ Lexer.format_token tok ^ "!";
         ] )
   | (tok, pos) :: rem ->
       ( [],
         tokens,
         [
-          format_msg pos "Parameter list: expected parameter type. Found  "
+          Utils.format_msg pos
+            "Parameter list: expected parameter type. Found  "
           ^ Lexer.format_token tok ^ "!";
         ] )
   | _ -> ([], tokens, [])
@@ -786,30 +798,31 @@ and match_func_call (tokens : Lexer.located_token list) (pos : Lexer.position) :
           ( None,
             tokens,
             [
-              format_msg p "Function call: expected ')'. Found! "
+              Utils.format_msg p "Function call: expected ')'. Found! "
               ^ Lexer.format_token tok ^ "!";
             ] )
       | _, _, arg_errs ->
           ( None,
             tokens,
-            [ format_msg p "Function call: invalid argument list!" ] @ arg_errs
-          ))
+            [ Utils.format_msg p "Function call: invalid argument list!" ]
+            @ arg_errs ))
   (* --invalid paths-- *)
   | (IDENTIFIER fname, p) :: (tok, _) :: rem ->
       ( None,
         tokens,
         [
-          format_msg p "Function call: expected '('. Found! "
+          Utils.format_msg p "Function call: expected '('. Found! "
           ^ Lexer.format_token tok ^ "!";
         ] )
   | (tok, p) :: rem ->
       ( None,
         tokens,
         [
-          format_msg p "Function call: expected function name. Found! "
+          Utils.format_msg p "Function call: expected function name. Found! "
           ^ Lexer.format_token tok ^ "!";
         ] )
-  | [] -> (None, tokens, [ format_msg pos "Function call: invalid syntax!" ])
+  | [] ->
+      (None, tokens, [ Utils.format_msg pos "Function call: invalid syntax!" ])
 
 and match_arg_list (tokens : Lexer.located_token list) (pos : Lexer.position) :
     arg_list option * Lexer.located_token list * parser_errors =
@@ -833,7 +846,7 @@ and match_arg_list (tokens : Lexer.located_token list) (pos : Lexer.position) :
             ( Some (List.rev accum),
               t,
               [
-                format_msg p "Argument list: expected ',' expr. Found  "
+                Utils.format_msg p "Argument list: expected ',' expr. Found  "
                 ^ Lexer.format_token tok ^ "!";
               ]
               @ exp1_errs )
@@ -844,7 +857,7 @@ and match_arg_list (tokens : Lexer.located_token list) (pos : Lexer.position) :
       ( Some [],
         tokens,
         [
-          format_msg p "Argument list: expected expr. Found  "
+          Utils.format_msg p "Argument list: expected expr. Found  "
           ^ Lexer.format_token tok ^ "!";
         ]
         @ exp_errs )
@@ -852,7 +865,8 @@ and match_arg_list (tokens : Lexer.located_token list) (pos : Lexer.position) :
   | None, [], exp_errs ->
       ( None,
         tokens,
-        [ format_msg pos "Argument list: no arguments provided!" ] @ exp_errs )
+        [ Utils.format_msg pos "Argument list: no arguments provided!" ]
+        @ exp_errs )
 
 (* Statement *)
 and match_stmt (tokens : Lexer.located_token list) :
@@ -894,7 +908,7 @@ and match_stmt_helper (tokens : Lexer.located_token list) :
                   ( None,
                     tokens,
                     [
-                      format_msg pos "Expression: expected ';'. Found "
+                      Utils.format_msg pos "Expression: expected ';'. Found "
                       ^ Lexer.format_token tok ^ "!";
                     ]
                     @ exp_errs )
@@ -926,17 +940,18 @@ and match_ctrl_flow (tokens : Lexer.located_token list) :
               | _, _, blk_errs ->
                   ( None,
                     tokens,
-                    blk_errs @ [ format_msg pos "If-else: invalid else block!" ]
-                  ))
+                    blk_errs
+                    @ [ Utils.format_msg pos "If-else: invalid else block!" ] ))
           | Some if_blk, rem_tok, _ -> (Some (IF (if_cond, if_blk)), rem_tok, [])
           | _, _, blk_errs ->
-              (None, tokens, blk_errs @ [ format_msg pos "If: invalid block!" ])
-          )
+              ( None,
+                tokens,
+                blk_errs @ [ Utils.format_msg pos "If: invalid block!" ] ))
       | _, _, ce_errs ->
           ( None,
             tokens,
-            ce_errs @ [ format_msg pos "If: invalid conditional expression!" ]
-          ))
+            ce_errs
+            @ [ Utils.format_msg pos "If: invalid conditional expression!" ] ))
   | _ -> (None, tokens, [])
 
 (* Block *)
@@ -956,13 +971,13 @@ and match_block (tokens : Lexer.located_token list) :
           ( None,
             tokens,
             [
-              format_msg tok_pos "Block: expected '}'. Found  "
+              Utils.format_msg tok_pos "Block: expected '}'. Found  "
               ^ Lexer.format_token tok ^ "!";
             ] )
       | _, _, stmt_errs ->
           ( None,
             tokens,
-            [ format_msg pos "Block: invalid statement!" ] @ stmt_errs ))
+            [ Utils.format_msg pos "Block: invalid statement!" ] @ stmt_errs ))
   | _ -> (None, tokens, [])
 
 (* Loops *)
@@ -988,11 +1003,14 @@ and match_loop (tokens : Lexer.located_token list) :
           | _, _, blk_errs ->
               ( None,
                 tokens,
-                [ format_msg pos "While loop: invalid block!" ] @ blk_errs ))
+                [ Utils.format_msg pos "While loop: invalid block!" ] @ blk_errs
+              ))
       | _, _, ce_errs ->
           ( None,
             tokens,
-            [ format_msg pos "While loop: invalid conditional expression!" ]
+            [
+              Utils.format_msg pos "While loop: invalid conditional expression!";
+            ]
             @ ce_errs ))
   (* try to match for *)
   | (FOR, pos) :: (L_PAREN, _) :: rem_tokens -> (
@@ -1005,14 +1023,14 @@ and match_loop (tokens : Lexer.located_token list) :
           | _, _, decl_errs ->
               ( None,
                 tokens,
-                [ format_msg pos "For loop: invalid initialization!" ]
+                [ Utils.format_msg pos "For loop: invalid initialization!" ]
                 @ asst_errs @ decl_errs )))
   (* --invalid paths-- *)
   | (FOR, pos) :: (tok, _) :: rem_tokens ->
       ( None,
         tokens,
         [
-          format_msg pos "For loop: expected '('. Found  "
+          Utils.format_msg pos "For loop: expected '('. Found  "
           ^ Lexer.format_token tok ^ "!";
         ] )
   | _ -> (None, tokens, [])
@@ -1037,19 +1055,20 @@ and for_loop_helper (tokens : Lexer.located_token list) (init : var_init) :
           | _, _, blk_errs ->
               ( None,
                 tokens,
-                [ format_msg pos "For loop: invalid block!" ] @ blk_errs ))
+                [ Utils.format_msg pos "For loop: invalid block!" ] @ blk_errs
+              ))
       | Some update, (tok, _) :: r, upd_errs ->
           ( None,
             tokens,
             [
-              format_msg pos "For loop: expected ')'. Found  "
+              Utils.format_msg pos "For loop: expected ')'. Found  "
               ^ Lexer.format_token tok ^ "!";
             ]
             @ upd_errs )
       | None, _, upd_errs ->
           ( None,
             tokens,
-            [ format_msg pos "For loop: invalid update expression! " ]
+            [ Utils.format_msg pos "For loop: invalid update expression! " ]
             @ upd_errs )
       | _ -> (None, tokens, []))
   (* --invalid paths-- *)
@@ -1057,7 +1076,7 @@ and for_loop_helper (tokens : Lexer.located_token list) (init : var_init) :
       ( None,
         tokens,
         [
-          format_msg pos "For loop: expected ';'. Found  "
+          Utils.format_msg pos "For loop: expected ';'. Found  "
           ^ Lexer.format_token tok ^ "!";
         ]
         @ errs )

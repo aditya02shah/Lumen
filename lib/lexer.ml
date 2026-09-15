@@ -279,7 +279,7 @@ let rec tokenize_helper (accum : located_token list) (prog : located_str list) :
 (* --PUBLIC INTERFACE-- *)
 let tokenize (filename : string) : located_token list * lexer_errors =
   (* read file content & split based on newline  *)
-  let lines = String.split_on_char '\n' (Io.read_file filename) in
+  let lines = String.split_on_char '\n' (Utils.read_file filename) in
 
   (* process each line *)
   let rec process_line (lines : string list) (line_num : int)
