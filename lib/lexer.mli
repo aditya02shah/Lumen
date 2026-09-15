@@ -58,6 +58,7 @@ type lexer_errors = located_token list (* source errors *)
 (* --HELPER FUNCTIONS-- *)
 val print_list : ('a -> string) -> 'a list -> unit
 val format_token : token -> string
+val format_dtype : dtype -> string
 
 (* --PUBLIC INTERFACE-- *)
 val tokenize : string -> located_token list * lexer_errors

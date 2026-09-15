@@ -61,15 +61,21 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
                 match (ent.dtype, get_expr_type at.expr) with
                 | INT, Some INT -> []
                 | BOOL, Some BOOL -> []
-                | _ ->
+                | dt1, Some dt2 ->
                     [
-                      Utils.format_msg pos
-                        "Assignment: variable type and expression type do not \
-                         match!";
+                      Utils.format_msg pos "Assignment: variable type "
+                      ^ Lexer.format_dtype dt1 ^ " and expression type "
+                      ^ Lexer.format_dtype dt2 ^ "do not match!";
+                    ]
+                | dt, None ->
+                    [
+                      Utils.format_msg pos "Assignment: variable type "
+                      ^ Lexer.format_dtype dt
+                      ^ " and expression dtype('none') do not match!";
                     ])
-            | errs ->
+            | expr_errs ->
                 Utils.format_msg pos "Assignment: contains invalid expression!"
-                :: errs
+                :: expr_errs
           else
             [
               Utils.format_msg pos
@@ -78,14 +84,16 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
             ]
       | _ ->
           [
-            Utils.format_msg pos "Assignment: contains undefined variable "
+            Utils.format_msg pos "Assignment: contains an undefined variable "
             ^ var_name ^ "!";
           ])
 
 (* Expression *)
+
 and check_expr (expr : Parser.expr) : semantic_errors =
   match expr with
   | VAR var, pos -> (
+      let var_name = match var with IDENT vname -> vname in
       (* condition: var must be defined and assigned a value *)
       match Hashtbl.find_opt var_env var with
       | Some ent -> (
@@ -93,11 +101,18 @@ and check_expr (expr : Parser.expr) : semantic_errors =
           | EXPR e -> []
           | NONE ->
               [
-                Utils.format_msg pos "Expression: contains unassigned variable!";
+                Utils.format_msg pos
+                  "Expression: contains an unassigned variable "
+                ^ var_name ^ "!";
               ])
-      | _ -> [ "Expression: contains undefined variable!" ])
+      | _ ->
+          [
+            Utils.format_msg pos "Expression: contains an undefined variable "
+            ^ var_name ^ "!";
+          ])
   (* check increment *)
   | INCREMENT var, pos -> (
+      let var_name = match var with IDENT vname -> vname in
       (* condition: var must be defined and assigned a value *)
       match Hashtbl.find_opt var_env var with
       | Some ent -> (
@@ -112,21 +127,29 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                   | _ ->
                       [
                         Utils.format_msg pos
-                          "Expression: Increment operation requires an integer \
-                           variable!";
+                          "Expression: Increment operation requires integer \
+                           variable. Variable "
+                        ^ var_name ^ " has "
+                        ^ Lexer.format_dtype ent.dtype
+                        ^ "!";
                       ])
               | NONE ->
                   [
                     Utils.format_msg pos
-                      "Expression: contains unassigned variable!";
+                      "Expression: contains an unassigned variable "
+                    ^ var_name ^ "!";
                   ])
           | false ->
               [
                 Utils.format_msg pos
-                  "Expression: cannot increment immutable variable!";
+                  "Expression: cannot increment immutable variable "
+                ^ var_name ^ "!";
               ])
-      | _ -> [ Utils.format_msg pos "Expression: contains undefined variable!" ]
-      )
+      | _ ->
+          [
+            Utils.format_msg pos "Expression: contains an undefined variable "
+            ^ var_name ^ "!";
+          ])
   (* check conditional expression *)
   | COND ce, _ -> check_cond_expr ce
   (* check function call *)
@@ -134,35 +157,11 @@ and check_expr (expr : Parser.expr) : semantic_errors =
   (* check arithmetic expression *)
   | BINARY (arithmetic_op, exp1, exp2), pos -> (
       match (exp1, exp2) with
-      | (VAR var1, _), (VAR var2, _) -> (
-          (* condition: variables must be defined and assigned a value *)
-          match
-            (Hashtbl.find_opt var_env var1, Hashtbl.find_opt var_env var2)
-          with
-          | Some ent1, Some ent2 -> (
-              (* check whether the variables have been assigned values *)
-              match (ent1.assigned_val, ent2.assigned_val) with
-              | EXPR e1, EXPR e2 -> (
-                  (* condition: both the variables must have matching types *)
-                  (* condition: the variable operands must not be boolean *)
-                  match (ent1.dtype, ent2.dtype) with
-                  | INT, INT -> []
-                  | _, _ ->
-                      [
-                        Utils.format_msg pos
-                          "Expression: arithmetic expression cannot compare \
-                           non-boolean types or variables of different types !";
-                      ])
-              | _ ->
-                  [
-                    Utils.format_msg pos
-                      "Expression: contains unassigned variables!";
-                  ])
-          | _, _ ->
-              [
-                Utils.format_msg pos "Expression: contains undefined variables!";
-              ])
+      | (VAR var1, _), (VAR var2, _) ->
+          check_binary_operation var1 var2 "Expression: arithmetic expression"
+            pos
       | (VAR var, pos), e | e, (VAR var, pos) -> (
+          let var_name = match var with IDENT vname -> vname in
           (* check whether var is defined *)
           match Hashtbl.find_opt var_env var with
           | Some ent -> (
@@ -172,39 +171,45 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                   match ent.dtype with
                   | INT -> check_expr e
                   | _ ->
-                      Utils.format_msg pos
-                        "Expression: arithmetic expressions requires integer \
-                         operands!"
+                      (Utils.format_msg pos
+                         "Expression: arithmetic operation requires integer \
+                          operands. Variable "
+                      ^ var_name ^ " has "
+                      ^ Lexer.format_dtype ent.dtype
+                      ^ "!")
                       :: check_expr e)
               | NONE ->
-                  Utils.format_msg pos
-                    "Expression: contains unassigned variables!"
+                  (Utils.format_msg pos
+                     "Expression: contains an unassigned variable "
+                  ^ var_name ^ "!")
                   :: check_expr e)
           | _ ->
-              Utils.format_msg pos "Expression: contains undefined variable!"
+              (Utils.format_msg pos
+                 "Expression: contains an undefined variable "
+              ^ var_name ^ "!")
               :: check_expr e)
       (* check func_call *)
       | (FUNC_CALL (f, _), pos), e | e, (FUNC_CALL (f, _), pos) -> (
           (* condition: only integer functions must be used in arithmetic expressions *)
-
+          let fname = match f.func_name with IDENT f -> f in
           (* check return type of function *)
           match Hashtbl.find_opt func_env f.func_name with
           | Some ent -> (
               match ent.ret_type with
               | DATATYPE INT, _ -> []
               | _ ->
-                  Utils.format_msg pos
-                    "Expression: non-integer functions cannot be used in \
-                     arithmetic expressions!"
+                  (Utils.format_msg pos "Expression: non-integer function "
+                  ^ fname ^ " cannot be used in an arithmetic expression!")
                   :: check_expr e)
           | _ ->
-              Utils.format_msg pos
-                "Expression: undefined function used in expression! "
+              (Utils.format_msg pos
+                 "Expression: contains an undefined function "
+              ^ fname ^ "!")
               :: check_expr e)
       | (COND ce, pos), _ | _, (COND ce, pos) ->
           [
             Utils.format_msg pos
-              "Expression: arithmetic expressions cannot be performed on \
+              "Expression: arithmetic operation cannot be performed on \
                conditional expressions!";
           ]
       (* check both operands *)
@@ -220,6 +225,7 @@ and check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
       | (NUMBER n1, _), (NUMBER n2, _) -> []
       | (NUMBER n, _), (IDENTIFIER var, _) | (IDENTIFIER var, _), (NUMBER n, _)
         -> (
+          let var_name = match var with IDENT vname -> vname in
           (* check whether var is declared *)
           match Hashtbl.find_opt var_env var with
           | Some ent -> (
@@ -228,7 +234,8 @@ and check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
               | NONE ->
                   [
                     Utils.format_msg pos
-                      "Conditional Expression: comparing unassigned variables!";
+                      "Conditional Expression: contains unassigned variable "
+                    ^ var_name ^ "!";
                   ]
               | _ -> (
                   match ent.dtype with
@@ -237,49 +244,80 @@ and check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
                       [
                         Utils.format_msg pos
                           "Conditional Expression: comparison requires integer \
-                           operands!";
+                           operands!. Variable "
+                        ^ var_name ^ " has "
+                        ^ Lexer.format_dtype ent.dtype
+                        ^ "!";
                       ]))
           | _ ->
               [
                 Utils.format_msg pos
-                  "Conditional Expression: comparing undefined variable!";
+                  "Conditional Expression: contains undefined variable "
+                ^ var_name ^ "!";
               ])
-      | (IDENTIFIER var1, pos), (IDENTIFIER var2, _) -> (
-          (* condition: both the variables must be defined and assigned a value *)
-          match
-            (Hashtbl.find_opt var_env var1, Hashtbl.find_opt var_env var2)
-          with
-          | Some ent1, Some ent2 -> (
-              (* check whether the variables have been assigned values *)
-              match (ent1.assigned_val, ent2.assigned_val) with
-              | EXPR e1, EXPR e2 -> (
-                  (* condition: both the variables must have matching types *)
-                  match (ent1.dtype, ent2.dtype) with
-                  | BOOL, BOOL -> []
-                  | INT, INT -> []
-                  | _, _ ->
-                      [
-                        Utils.format_msg pos
-                          "Conditional Expression: cannot compare values of \
-                           different types!";
-                      ])
-              | _ ->
-                  [
-                    Utils.format_msg pos
-                      "Conditional Expression: comparing unassigned variables!";
-                  ])
-          | _ ->
-              [
-                Utils.format_msg pos
-                  "Conditional Expression: comparing undefined variables!";
-              ])
-      | _ ->
-          [
-            Utils.format_msg pos
-              "Conditional Expression: comparing undefined variables!";
-          ])
+      | (IDENTIFIER var1, pos), (IDENTIFIER var2, _) ->
+          check_binary_operation var1 var2 "Conditional Expression" pos)
   | COMBINATION ((cm, ce1, ce2), _) -> check_cond_expr ce1 @ check_cond_expr ce2
   | _ -> []
+
+and check_binary_operation (var1 : Parser.ident) (var2 : Parser.ident)
+    (msg_prefix : string) (pos : Lexer.position) : semantic_errors =
+  let var_name1 = match var1 with IDENT vname -> vname in
+  let var_name2 = match var2 with IDENT vname -> vname in
+  (* condition: both the variables must be defined and assigned a value *)
+  match (Hashtbl.find_opt var_env var1, Hashtbl.find_opt var_env var2) with
+  | Some ent1, Some ent2 -> (
+      (* check whether the variables have been assigned values *)
+      match (ent1.assigned_val, ent2.assigned_val) with
+      (* --valid path-- *)
+      | EXPR e1, EXPR e2 -> (
+          (* condition: both the variables must have matching types *)
+          (* condition: the variable operands must not be boolean *)
+          match (ent1.dtype, ent2.dtype) with
+          | INT, INT -> []
+          | _ ->
+              [
+                Utils.format_msg pos msg_prefix
+                ^ " requires integer operands. Variable " ^ var_name1 ^ " has "
+                ^ Lexer.format_dtype ent1.dtype
+                ^ " and variable " ^ var_name2 ^ " has "
+                ^ Lexer.format_dtype ent2.dtype
+                ^ "!";
+              ])
+      (* --invalid paths-- *)
+      | EXPR e, NONE ->
+          [
+            Utils.format_msg pos msg_prefix
+            ^ " contains an unassigned variable - " ^ var_name2 ^ "!";
+          ]
+      | NONE, EXPR e ->
+          [
+            Utils.format_msg pos msg_prefix
+            ^ " contains an unassigned variable - " ^ var_name1 ^ "!";
+          ]
+      | NONE, NONE ->
+          [
+            Utils.format_msg pos msg_prefix
+            ^ " contains unassigned variables - " ^ var_name1 ^ "!" ^ " and "
+            ^ var_name2 ^ "!";
+          ])
+  (* --invalid paths-- *)
+  | Some ent, None ->
+      [
+        Utils.format_msg pos msg_prefix
+        ^ ": contains an undefined variable " ^ var_name2 ^ "!";
+      ]
+  | None, Some ent ->
+      [
+        Utils.format_msg pos msg_prefix
+        ^ ": contains an undefined variable " ^ var_name1 ^ "!";
+      ]
+  | None, None ->
+      [
+        Utils.format_msg pos msg_prefix
+        ^ ": contains undefined variables " ^ var_name1 ^ " and " ^ var_name2
+        ^ "!";
+      ]
 
 and get_expr_type (expr : Parser.expr) : Lexer.dtype option =
   (* returns the type for an expression if it can be determined, None otherwise *)
@@ -351,6 +389,7 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
           params = func.params;
         };
 
+      let fname = match func.func_name with IDENT f -> f in
       (* condition: each block must contain a maximum of 1 return expression (not including sub-blocks) *)
       match check_func_block func.body with
       | [] -> (
@@ -376,26 +415,54 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
                                  match (d, get_expr_type e) with
                                  | INT, Some INT -> []
                                  | BOOL, Some BOOL -> []
-                                 | _, _ ->
+                                 | _, Some dt ->
                                      [
                                        Utils.format_msg e_pos
-                                         "Function: contains invalid return \
-                                          expression!";
+                                         "Function: function "
+                                       ^ fname ^ "'s return expression type  "
+                                       ^ Lexer.format_dtype dt
+                                       ^ "doesn't match return type "
+                                       ^ Lexer.format_dtype dt ^ "!";
+                                     ]
+                                 | _, None ->
+                                     [
+                                       Utils.format_msg e_pos
+                                         "Function: return expression type \
+                                          dtype('none') "
+                                       ^ "doesn't match return type "
+                                       ^ Lexer.format_dtype d ^ "!";
                                      ])
                              | (NONE, e_pos), true -> []
-                             | (_, e_pos), _ ->
+                             (* --invalid paths-- *)
+                             | (EXPR e, e_pos), true ->
                                  [
-                                   Utils.format_msg e_pos
-                                     "Function: cannot use optional type \
-                                      return expressions in non-optional \
-                                      function declarations!";
+                                   Utils.format_msg e_pos "Function: function "
+                                   ^ fname
+                                   ^ " expects optional return expressions - \
+                                      'Some (return expression)' or 'None'!";
+                                 ]
+                             | (SOME_EXPR e, e_pos), false ->
+                                 [
+                                   Utils.format_msg e_pos "Function: function "
+                                   ^ fname
+                                   ^ " expects non-optional return \
+                                      expressions. Found 'Some (return \
+                                      expression)'!";
+                                 ]
+                             | (NONE, e_pos), false ->
+                                 [
+                                   Utils.format_msg e_pos "Function: function "
+                                   ^ fname
+                                   ^ " expects non-optional return \
+                                      expressions. Found 'None'!";
                                  ])
                          | _ ->
                              [
                                Utils.format_msg f_pos
-                                 "Function: non-void function contains \
-                                  multiple return expressions in the same \
-                                  block!";
+                                 "Function: non-void function "
+                               ^ fname
+                               ^ " contains multiple return expressions in the \
+                                  same block!";
                              ])
                        ret_stmts)
               | VOID, _ -> (
@@ -404,16 +471,20 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
                   | [] -> []
                   | _ ->
                       [
-                        Utils.format_msg f_pos
-                          "Function: void function cannot return value!";
+                        Utils.format_msg f_pos "Function: void function "
+                        ^ fname ^ " cannot return a value!";
                       ]))
-          | es -> es)
-      | err -> err)
+          | blk_errs ->
+              (Utils.format_msg f_pos "Function: "
+              ^ fname ^ " contains" ^ "invalid block!")
+              :: blk_errs)
+      | fd_errs -> fd_errs)
 
 (* function call *)
 and check_func_call (func_call : Parser.func_call) : semantic_errors =
   match func_call with
   | func, pos -> (
+      let fname = match func.func_name with IDENT f -> f in
       (* check if function has been defined *)
       match Hashtbl.find_opt func_env func.func_name with
       | Some ent -> (
@@ -426,7 +497,10 @@ and check_func_call (func_call : Parser.func_call) : semantic_errors =
           | [] -> compare_params_with_args ent.params func.args pos
           | errors -> errors)
       | None ->
-          [ Utils.format_msg pos "Function Call: call to undefined function!" ])
+          [
+            Utils.format_msg pos "Function Call: call to undefined function "
+            ^ fname ^ "!";
+          ])
 
 and check_func_block (block : Parser.block) : semantic_errors =
   (* condition: each block should contain a maximum of 1 return expression *)
@@ -466,15 +540,29 @@ and compare_params_with_args (params : Parser.param_list)
   (* helper function which compares parameters & arguments *)
   (* Note: each argument should already be checked *)
   match (params, args) with
-  | (param_type, _) :: rem_param, arg :: rem_args -> (
+  | (param_type, param_name) :: rem_param, arg :: rem_args -> (
+      let pname = match param_name with IDENT p -> p in
       (* condition: argument type must match parameter type *)
       match (param_type, get_expr_type arg) with
       | INT, Some INT -> []
       | BOOL, Some BOOL -> []
-      | _, _ ->
+      | _, Some dt ->
           [
             Utils.format_msg pos
-              "Function Call: argument type doesn't match parameter type!";
+              "Function call: argument type doesn't match parameter type. \
+               Parameter "
+            ^ pname ^ " has "
+            ^ Lexer.format_dtype param_type
+            ^ " and argument has " ^ Lexer.format_dtype dt ^ "!";
+          ]
+      | _, None ->
+          [
+            Utils.format_msg pos
+              "Function call: argument type doesn't match parameter type. \
+               Parameter "
+            ^ pname ^ " has "
+            ^ Lexer.format_dtype param_type
+            ^ " and argument has dtype('none')!";
           ])
   | [], [] -> []
   (* condition: argument count must match parameter count *)

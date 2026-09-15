@@ -74,6 +74,9 @@ let int_of_char_list chars =
 let string_of_char_list chars = chars |> List.to_seq |> String.of_seq
 let string_to_char_list str = List.init (String.length str) (String.get str)
 
+let format_dtype (dt : dtype) : string =
+  match dt with INT -> "dtype('Int')" | BOOL -> "dtype('Bool')"
+
 let format_token (t : token) : string =
   match t with
   (* data *)
