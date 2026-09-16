@@ -254,6 +254,7 @@ let rec tokenize_helper (accum : located_token list) (prog : located_str list) :
       (* syntax *)
       | "int" -> tokenize_helper ((DATATYPE INT, pos) :: accum) rest
       | "bool" -> tokenize_helper ((DATATYPE BOOL, pos) :: accum) rest
+      | "void" -> tokenize_helper ((VOID, pos) :: accum) rest
       | "Option" -> tokenize_helper ((OPTION, pos) :: accum) rest
       | "Some" -> tokenize_helper ((SOME, pos) :: accum) rest
       | "None" -> tokenize_helper ((NONE, pos) :: accum) rest

@@ -65,15 +65,15 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
                     [
                       Utils.format_msg pos
                         (Printf.sprintf
-                           "Assignment: variable type %s and expression type \
-                            %s do not match!"
+                           "Assignment: variable type '%s' and expression type \
+                            '%s' do not match!"
                            (Lexer.format_dtype dt1) (Lexer.format_dtype dt2));
                     ]
                 | dt, None ->
                     [
                       Utils.format_msg pos
                         (Printf.sprintf
-                           "Assignment: variable type %s and expression \
+                           "Assignment: variable type '%s' and expression \
                             dtype('none') do not match!"
                            (Lexer.format_dtype dt));
                     ])
@@ -84,13 +84,13 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
             [
               Utils.format_msg pos
                 (Printf.sprintf
-                   "Assignment: cannot assign value to immutable variable %s!"
+                   "Assignment: cannot assign value to immutable variable '%s'!"
                    var_name);
             ]
       | _ ->
           [
             Utils.format_msg pos
-              (Printf.sprintf "Assignment: contains an undefined variable %s!"
+              (Printf.sprintf "Assignment: contains an undefined variable '%s'!"
                  var_name);
           ])
 
@@ -109,12 +109,13 @@ and check_expr (expr : Parser.expr) : semantic_errors =
               [
                 Utils.format_msg pos
                   (Printf.sprintf
-                     "Expression: contains an unassigned variable %s!" var_name);
+                     "Expression: contains an unassigned variable '%s'!"
+                     var_name);
               ])
       | _ ->
           [
             Utils.format_msg pos
-              (Printf.sprintf "Expression: contains an undefined variable %s!"
+              (Printf.sprintf "Expression: contains an undefined variable '%s'!"
                  var_name);
           ])
   (* check increment *)
@@ -136,7 +137,7 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                         Utils.format_msg pos
                           (Printf.sprintf
                              "Expression: Increment operation requires integer \
-                              variable. Variable %s has %s!"
+                              variable. Variable '%s' has '%s'!"
                              var_name
                              (Lexer.format_dtype ent.dtype));
                       ])
@@ -144,20 +145,20 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                   [
                     Utils.format_msg pos
                       (Printf.sprintf
-                         "Expression: contains an unassigned variable %s!"
+                         "Expression: contains an unassigned variable '%s'!"
                          var_name);
                   ])
           | false ->
               [
                 Utils.format_msg pos
                   (Printf.sprintf
-                     "Expression: cannot increment immutable variable %s!"
+                     "Expression: cannot increment immutable variable '%s'!"
                      var_name);
               ])
       | _ ->
           [
             Utils.format_msg pos
-              (Printf.sprintf "Expression: contains an undefined variable %s!"
+              (Printf.sprintf "Expression: contains an undefined variable '%s'!"
                  var_name);
           ])
   (* check conditional expression *)
@@ -184,20 +185,20 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                       Utils.format_msg pos
                         (Printf.sprintf
                            "Expression: arithmetic operation requires integer \
-                            operands. Variable %s has %s!"
+                            operands. Variable '%s' has '%s'!"
                            var_name
                            (Lexer.format_dtype ent.dtype))
                       :: check_expr e)
               | NONE ->
                   Utils.format_msg pos
                     (Printf.sprintf
-                       "Expression: contains an unassigned variable %s!"
+                       "Expression: contains an unassigned variable '%s'!"
                        var_name)
                   :: check_expr e)
           | _ ->
               Utils.format_msg pos
-                (Printf.sprintf "Expression: contains an undefined variable %s!"
-                   var_name)
+                (Printf.sprintf
+                   "Expression: contains an undefined variable '%s'!" var_name)
               :: check_expr e)
       (* check func_call *)
       | (FUNC_CALL (f, _), pos), e | e, (FUNC_CALL (f, _), pos) -> (
@@ -211,14 +212,14 @@ and check_expr (expr : Parser.expr) : semantic_errors =
               | _ ->
                   Utils.format_msg pos
                     (Printf.sprintf
-                       "Expression: non-integer function %s cannot be used in \
-                        an arithmetic expression!"
+                       "Expression: non-integer function '%s' cannot be used \
+                        in an arithmetic expression!"
                        fname)
                   :: check_expr e)
           | _ ->
               Utils.format_msg pos
-                (Printf.sprintf "Expression: contains an undefined function %s!"
-                   fname)
+                (Printf.sprintf
+                   "Expression: contains an undefined function '%s'!" fname)
               :: check_expr e)
       | (COND ce, pos), _ | _, (COND ce, pos) ->
           [
@@ -261,7 +262,7 @@ and check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
                         Utils.format_msg pos
                           (Printf.sprintf
                              "Conditional Expression: comparison requires \
-                              integer operands!. Variable %s has %s!"
+                              integer operands!. Variable '%s' has '%s'!"
                              var_name
                              (Lexer.format_dtype ent.dtype));
                       ]))
@@ -269,7 +270,7 @@ and check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
               [
                 Utils.format_msg pos
                   (Printf.sprintf
-                     "Conditional Expression: contains undefined variable %s!"
+                     "Conditional Expression: contains undefined variable '%s'!"
                      var_name);
               ])
       | (IDENTIFIER var1, pos), (IDENTIFIER var2, _) ->
@@ -296,8 +297,8 @@ and check_binary_operation (var1 : Parser.ident) (var2 : Parser.ident)
               [
                 Utils.format_msg pos
                   (Printf.sprintf
-                     "%s requires integer operands. Variable %s has %s and \
-                      variable %s has %s!"
+                     "%s requires integer operands. Variable '%s' has '%s' and \
+                      variable '%s' has '%s'!"
                      msg_prefix var_name1
                      (Lexer.format_dtype ent1.dtype)
                      var_name2
@@ -307,38 +308,38 @@ and check_binary_operation (var1 : Parser.ident) (var2 : Parser.ident)
       | EXPR e, NONE ->
           [
             Utils.format_msg pos
-              (Printf.sprintf "%s contains an unassigned variable - %s!"
+              (Printf.sprintf "%s contains an unassigned variable '%s'!"
                  msg_prefix var_name2);
           ]
       | NONE, EXPR e ->
           [
             Utils.format_msg pos
-              (Printf.sprintf "%s contains an unassigned variable - %s!"
+              (Printf.sprintf "%s contains an unassigned variable '%s'!"
                  msg_prefix var_name1);
           ]
       | NONE, NONE ->
           [
             Utils.format_msg pos
-              (Printf.sprintf "%s contains unassigned variables - %s! and %s!"
+              (Printf.sprintf "%s contains unassigned variables '%s' and '%s'!"
                  msg_prefix var_name1 var_name2);
           ])
   (* --invalid paths-- *)
   | Some ent, None ->
       [
         Utils.format_msg pos
-          (Printf.sprintf "%s: contains an undefined variable %s!" msg_prefix
+          (Printf.sprintf "%s: contains an undefined variable '%s'!" msg_prefix
              var_name2);
       ]
   | None, Some ent ->
       [
         Utils.format_msg pos
-          (Printf.sprintf "%s: contains an undefined variable %s!" msg_prefix
+          (Printf.sprintf "%s: contains an undefined variable '%s'!" msg_prefix
              var_name1);
       ]
   | None, None ->
       [
         Utils.format_msg pos
-          (Printf.sprintf "%s: contains undefined variables %s and %s!"
+          (Printf.sprintf "%s: contains undefined variables '%s' and '%s'!"
              msg_prefix var_name1 var_name2);
       ]
 
@@ -414,7 +415,7 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
 
       let fname = match func.func_name with IDENT f -> f in
       (* condition: each block must contain a maximum of 1 return expression (not including sub-blocks) *)
-      match check_func_block func.body with
+      match check_func_block func.body fname with
       | [] -> (
           (* check block *)
           match check_block func.body with
@@ -422,80 +423,92 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
               (* condition: void function must not contain return expression *)
               let ret_stmts = get_ret_expr_in_blk func.body true in
               match func.return_type with
-              | DATATYPE d, _ ->
-                  (* check each return expression and gather errors *)
-                  List.flatten
-                    (List.map
-                       (fun re ->
-                         (* check return expression *)
-                         match check_ret_expr re with
-                         | [] -> (
-                             (* condition: return type of function must match return expression's type *)
-                             (* condition: return expressions in optional functions must use "Some" & "None" *)
-                             match (re, func.is_optional_type) with
-                             | (EXPR e, e_pos), false
-                             | (SOME_EXPR e, e_pos), true -> (
-                                 match (d, get_expr_type e) with
-                                 | INT, Some INT -> []
-                                 | BOOL, Some BOOL -> []
-                                 | _, Some dt ->
+              | DATATYPE d, _ -> (
+                  match ret_stmts with
+                  | [] ->
+                      [
+                        Utils.format_msg f_pos
+                          (Printf.sprintf
+                             "Non-void Function: '%s' contains no return \
+                              expression!"
+                             fname);
+                      ]
+                  | _ ->
+                      (* check each return expression and gather errors *)
+                      List.flatten
+                        (List.map
+                           (fun re ->
+                             (* check return expression *)
+                             match check_ret_expr re with
+                             | [] -> (
+                                 (* condition: return type of function must match return expression's type *)
+                                 (* condition: return expressions in optional functions must use "Some" & "None" *)
+                                 match (re, func.is_optional_type) with
+                                 | (EXPR e, e_pos), false
+                                 | (SOME_EXPR e, e_pos), true -> (
+                                     match (d, get_expr_type e) with
+                                     | INT, Some INT -> []
+                                     | BOOL, Some BOOL -> []
+                                     | _, Some dt ->
+                                         [
+                                           Utils.format_msg e_pos
+                                             (Printf.sprintf
+                                                "Function: function %s's \
+                                                 return expression type '%s' \
+                                                 doesn't match return type \
+                                                 '%s'!"
+                                                fname (Lexer.format_dtype dt)
+                                                (Lexer.format_dtype dt));
+                                         ]
+                                     | _, None ->
+                                         [
+                                           Utils.format_msg e_pos
+                                             (Printf.sprintf
+                                                "Function: return expression \
+                                                 type dtype('none') doesn't \
+                                                 match return type '%s'!"
+                                                (Lexer.format_dtype d));
+                                         ])
+                                 | (NONE, e_pos), true -> []
+                                 (* --invalid paths-- *)
+                                 | (EXPR e, e_pos), true ->
                                      [
                                        Utils.format_msg e_pos
                                          (Printf.sprintf
-                                            "Function: function %s's return \
-                                             expression type %s doesn't match \
-                                             return type %s!"
-                                            fname (Lexer.format_dtype dt)
-                                            (Lexer.format_dtype dt));
+                                            "Function: function '%s' expects \
+                                             optional return expressions - \
+                                             'Some (return expression)' or \
+                                             'None'!"
+                                            fname);
                                      ]
-                                 | _, None ->
+                                 | (SOME_EXPR e, e_pos), false ->
                                      [
                                        Utils.format_msg e_pos
                                          (Printf.sprintf
-                                            "Function: return expression type \
-                                             dtype('none') doesn't match \
-                                             return type %s!"
-                                            (Lexer.format_dtype d));
+                                            "Function: function '%s' expects \
+                                             non-optional return expressions. \
+                                             Found 'Some (return expression)'!"
+                                            fname);
+                                     ]
+                                 | (NONE, e_pos), false ->
+                                     [
+                                       Utils.format_msg e_pos
+                                         (Printf.sprintf
+                                            "Function: function '%s' expects \
+                                             non-optional return expressions. \
+                                             Found 'None'!"
+                                            fname);
                                      ])
-                             | (NONE, e_pos), true -> []
-                             (* --invalid paths-- *)
-                             | (EXPR e, e_pos), true ->
+                             | _ ->
                                  [
-                                   Utils.format_msg e_pos
+                                   Utils.format_msg f_pos
                                      (Printf.sprintf
-                                        "Function: function %s expects \
-                                         optional return expressions - 'Some \
-                                         (return expression)' or 'None'!"
-                                        fname);
-                                 ]
-                             | (SOME_EXPR e, e_pos), false ->
-                                 [
-                                   Utils.format_msg e_pos
-                                     (Printf.sprintf
-                                        "Function: function %s expects \
-                                         non-optional return expressions. \
-                                         Found 'Some (return expression)'!"
-                                        fname);
-                                 ]
-                             | (NONE, e_pos), false ->
-                                 [
-                                   Utils.format_msg e_pos
-                                     (Printf.sprintf
-                                        "Function: function %s expects \
-                                         non-optional return expressions. \
-                                         Found 'None'!"
+                                        "Function: non-void function '%s' \
+                                         contains multiple return expressions \
+                                         in the same block!"
                                         fname);
                                  ])
-                         | _ ->
-                             [
-                               Utils.format_msg f_pos
-                                 (Printf.sprintf
-                                    "Function: non-void function %s contains \
-                                     multiple return expressions in the same \
-                                     block!"
-                                    fname);
-                             ])
-                       ret_stmts)
+                           ret_stmts))
               | VOID, _ -> (
                   (* void function shouldn't contain return expressions *)
                   match ret_stmts with
@@ -504,12 +517,13 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
                       [
                         Utils.format_msg f_pos
                           (Printf.sprintf
-                             "Function: void function %s cannot return a value!"
+                             "Function: void function '%s' cannot return a \
+                              value!"
                              fname);
                       ]))
           | blk_errs ->
               Utils.format_msg f_pos
-                (Printf.sprintf "Function: %s contains invalid block!" fname)
+                (Printf.sprintf "Function:'%s' contains invalid block!" fname)
               :: blk_errs)
       | fd_errs -> fd_errs)
 
@@ -527,16 +541,17 @@ and check_func_call (func_call : Parser.func_call) : semantic_errors =
           in
           match errs with
           (* compare parameters with arguments *)
-          | [] -> compare_params_with_args ent.params func.args pos
+          | [] -> compare_params_with_args ent.params func.args pos fname
           | errors -> errors)
       | None ->
           [
             Utils.format_msg pos
-              (Printf.sprintf "Function Call: call to undefined function %s!"
+              (Printf.sprintf "Function Call: call to undefined function '%s'!"
                  fname);
           ])
 
-and check_func_block (block : Parser.block) : semantic_errors =
+and check_func_block (block : Parser.block) (func_name : string) :
+    semantic_errors =
   (* condition: each block should contain a maximum of 1 return expression *)
   let rec check_sub_blocks (stmts : Parser.stmt list) : semantic_errors =
     match stmts with
@@ -545,15 +560,16 @@ and check_func_block (block : Parser.block) : semantic_errors =
         match s with
         | IF (cond, blk) ->
             (* check sub_block *)
-            check_func_block blk @ check_sub_blocks st
+            check_func_block blk func_name @ check_sub_blocks st
         | IF_ELSE ((cond, if_blk), else_blk) ->
             (* check both sub-blocks *)
-            check_func_block if_blk @ check_func_block else_blk
+            check_func_block if_blk func_name
+            @ check_func_block else_blk func_name
         | LOOP lp -> (
             (* check loop *)
             match lp with
-            | WHILE lp, _ -> check_func_block lp.body
-            | FOR lp, _ -> check_func_block lp.body)
+            | WHILE lp, _ -> check_func_block lp.body func_name
+            | FOR lp, _ -> check_func_block lp.body func_name)
         | _ -> check_sub_blocks st)
   in
   match block with
@@ -565,12 +581,15 @@ and check_func_block (block : Parser.block) : semantic_errors =
       | _ ->
           [
             Utils.format_msg pos
-              "Function: each block inside function cannot contain more than 1 \
-               return expression ";
+              (Printf.sprintf
+                 "Function: each block inside function '%s' cannot contain \
+                  more than 1 return expression "
+                 func_name);
           ])
 
 and compare_params_with_args (params : Parser.param_list)
-    (args : Parser.arg_list) (pos : Lexer.position) : semantic_errors =
+    (args : Parser.arg_list) (pos : Lexer.position) (func_name : string) :
+    semantic_errors =
   (* helper function which compares parameters & arguments *)
   (* Note: each argument should already be checked *)
   match (params, args) with
@@ -585,27 +604,32 @@ and compare_params_with_args (params : Parser.param_list)
             Utils.format_msg pos
               (Printf.sprintf
                  "Function call: argument type doesn't match parameter type. \
-                  Parameter %s has %s and argument has %s!"
+                  Parameter '%s' has '%s' and argument has '%s' in call to \
+                  '%s'!"
                  pname
                  (Lexer.format_dtype param_type)
-                 (Lexer.format_dtype dt));
+                 (Lexer.format_dtype dt) func_name);
           ]
       | _, None ->
           [
             Utils.format_msg pos
               (Printf.sprintf
                  "Function call: argument type doesn't match parameter type. \
-                  Parameter %s has %s and argument has dtype('none')!"
+                  Parameter '%s' has '%s' and argument has dtype('none') in \
+                  call to '%s' !"
                  pname
-                 (Lexer.format_dtype param_type));
+                 (Lexer.format_dtype param_type)
+                 func_name);
           ])
   | [], [] -> []
   (* condition: argument count must match parameter count *)
   | _ ->
       [
         Utils.format_msg pos
-          "Function Call: argument count must match parameter count in \
-           function call!";
+          (Printf.sprintf
+             "Function Call: argument count must match parameter count in call \
+              to '%s'!"
+             func_name);
       ]
 
 (* Statement *)
