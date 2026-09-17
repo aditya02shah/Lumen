@@ -487,17 +487,22 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
                                                 (Lexer.format_dtype func_rettype));
                                          ])
                                  | (NONE, e_pos), true -> []
-                                 (* --invalid paths-- *)
-                                 | (EXPR e, e_pos), true ->
-                                     [
-                                       Utils.format_msg e_pos
-                                         (Printf.sprintf
-                                            "Function: function '%s' expects \
-                                             optional return expressions - \
-                                             'Some (return expression)' or \
-                                             'None'!"
-                                            fname);
-                                     ]
+                                 | (EXPR e, e_pos), true -> (
+                                     (* if function uses optional types and return expression contains optional types, it is valid *)
+                                     match (func_rettype, get_expr_type e) with
+                                     | INT, Some (OPTION_DTYPE INT) -> []
+                                     | BOOL, Some (OPTION_DTYPE BOOL) -> []
+                                     | _, _ ->
+                                         [
+                                           Utils.format_msg e_pos
+                                             (Printf.sprintf
+                                                "Function: function '%s' \
+                                                 expects optional return \
+                                                 expressions - 'Some (return \
+                                                 expression)' or 'None'!"
+                                                fname);
+                                         ])
+                                 (* --invalid path-- *)
                                  | (SOME_EXPR e, e_pos), false ->
                                      [
                                        Utils.format_msg e_pos
