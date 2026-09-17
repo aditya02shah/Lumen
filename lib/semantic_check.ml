@@ -5,6 +5,9 @@ type semantic_errors = string list
 type asst_val = NONE | EXPR of Parser.expr
 type var_details = { mut : bool; dtype : Lexer.dtype; assigned_val : asst_val }
 
+(* Expressions *)
+type expr_type = DTYPE of Lexer.dtype | OPTION_DTYPE of Lexer.dtype | VOID
+
 (* Functions *)
 type func_details = {
   is_optional_type : bool;
@@ -15,6 +18,16 @@ type func_details = {
 (* --GLOBAL VARS-- *)
 let var_env = Hashtbl.create 100 (* maps var -> var_details *)
 let func_env = Hashtbl.create 100 (* maps func -> func_details *)
+
+(* --HELPER FUNCTIONS-- *)
+let format_expr_type (etype : expr_type) =
+  match etype with
+  | DTYPE d -> Lexer.format_dtype d
+  | OPTION_DTYPE d -> (
+      match d with
+      | INT -> "dtype('Option<Int>')"
+      | BOOL -> "dtype('Option<Bool>')")
+  | VOID -> "dtype('void')"
 
 (* --SEMANTIC CHECKER IMPLEMENTATION-- *)
 (* Variables *)
@@ -59,21 +72,21 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
             match check_expr at.expr with
             | [] -> (
                 match (ent.dtype, get_expr_type at.expr) with
-                | INT, Some INT -> []
-                | BOOL, Some BOOL -> []
+                | INT, Some (DTYPE INT) -> []
+                | BOOL, Some (DTYPE INT) -> []
                 | dt1, Some dt2 ->
                     [
                       Utils.format_msg pos
                         (Printf.sprintf
-                           "Assignment: variable type '%s' and expression type \
-                            '%s' do not match!"
-                           (Lexer.format_dtype dt1) (Lexer.format_dtype dt2));
+                           "Assignment: variable %s and expression %s do not \
+                            match!"
+                           (Lexer.format_dtype dt1) (format_expr_type dt2));
                     ]
                 | dt, None ->
                     [
                       Utils.format_msg pos
                         (Printf.sprintf
-                           "Assignment: variable type '%s' and expression \
+                           "Assignment: variable %s and expression \
                             dtype('none') do not match!"
                            (Lexer.format_dtype dt));
                     ])
@@ -137,7 +150,7 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                         Utils.format_msg pos
                           (Printf.sprintf
                              "Expression: Increment operation requires integer \
-                              variable. Variable '%s' has '%s'!"
+                              variable. Variable '%s' has %s!"
                              var_name
                              (Lexer.format_dtype ent.dtype));
                       ])
@@ -185,7 +198,7 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                       Utils.format_msg pos
                         (Printf.sprintf
                            "Expression: arithmetic operation requires integer \
-                            operands. Variable '%s' has '%s'!"
+                            operands. Variable '%s' has %s!"
                            var_name
                            (Lexer.format_dtype ent.dtype))
                       :: check_expr e)
@@ -262,7 +275,7 @@ and check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
                         Utils.format_msg pos
                           (Printf.sprintf
                              "Conditional Expression: comparison requires \
-                              integer operands!. Variable '%s' has '%s'!"
+                              integer operands!. Variable '%s' has %s!"
                              var_name
                              (Lexer.format_dtype ent.dtype));
                       ]))
@@ -343,25 +356,28 @@ and check_binary_operation (var1 : Parser.ident) (var2 : Parser.ident)
              msg_prefix var_name1 var_name2);
       ]
 
-and get_expr_type (expr : Parser.expr) : Lexer.dtype option =
+and get_expr_type (expr : Parser.expr) : expr_type option =
   (* returns the type for an expression if it can be determined, None otherwise *)
   (* NOTE: assumes expr has already been checked *)
   match expr with
-  | INT _, _ -> Some INT
+  | INT _, _ -> Some (DTYPE INT)
   | VAR v, _ -> (
       (* determine var type *)
       match Hashtbl.find_opt var_env v with
-      | Some ent -> Some ent.dtype
+      | Some ent -> Some (DTYPE ent.dtype)
       | None -> None)
-  | INCREMENT x, _ -> Some INT
+  | INCREMENT x, _ -> Some (DTYPE INT)
   | FUNC_CALL (f, _), _ -> (
       (* determine func return type *)
       match Hashtbl.find_opt func_env f.func_name with
       | Some ent -> (
-          match ent.ret_type with DATATYPE d, _ -> Some d | VOID, _ -> None)
+          match (ent.ret_type, ent.is_optional_type) with
+          | (DATATYPE d, _), false -> Some (DTYPE d)
+          | (DATATYPE d, _), true -> Some (OPTION_DTYPE d)
+          | (VOID, _), _ -> Some VOID)
       | None -> None)
-  | BINARY (_, _, _), _ -> Some INT
-  | COND _, _ -> Some BOOL
+  | BINARY (_, _, _), _ -> Some (DTYPE INT)
+  | COND _, _ -> Some (DTYPE BOOL)
 
 and get_ret_expr_in_blk (func_blk : Parser.block) (include_sub_blocks : bool) :
     Parser.ret_expr list =
@@ -423,7 +439,7 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
               (* condition: void function must not contain return expression *)
               let ret_stmts = get_ret_expr_in_blk func.body true in
               match func.return_type with
-              | DATATYPE d, _ -> (
+              | DATATYPE func_rettype, _ -> (
                   match ret_stmts with
                   | [] ->
                       [
@@ -446,28 +462,29 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
                                  match (re, func.is_optional_type) with
                                  | (EXPR e, e_pos), false
                                  | (SOME_EXPR e, e_pos), true -> (
-                                     match (d, get_expr_type e) with
-                                     | INT, Some INT -> []
-                                     | BOOL, Some BOOL -> []
+                                     match (func_rettype, get_expr_type e) with
+                                     | INT, Some (DTYPE INT) -> []
+                                     | BOOL, Some (DTYPE BOOL) -> []
                                      | _, Some dt ->
                                          [
                                            Utils.format_msg e_pos
                                              (Printf.sprintf
-                                                "Function: function %s's \
-                                                 return expression type '%s' \
-                                                 doesn't match return type \
-                                                 '%s'!"
-                                                fname (Lexer.format_dtype dt)
-                                                (Lexer.format_dtype dt));
+                                                "Function: '%s's return \
+                                                 expression of %s doesn't \
+                                                 match declared %s!"
+                                                fname
+                                                (Lexer.format_dtype func_rettype)
+                                                (format_expr_type dt));
                                          ]
                                      | _, None ->
                                          [
                                            Utils.format_msg e_pos
                                              (Printf.sprintf
-                                                "Function: return expression \
-                                                 type dtype('none') doesn't \
-                                                 match return type '%s'!"
-                                                (Lexer.format_dtype d));
+                                                "Function: '%s's return \
+                                                 expression of dtype('none') \
+                                                 doesn't match declared  %s!"
+                                                fname
+                                                (Lexer.format_dtype func_rettype));
                                          ])
                                  | (NONE, e_pos), true -> []
                                  (* --invalid paths-- *)
@@ -597,8 +614,8 @@ and compare_params_with_args (params : Parser.param_list)
       let pname = match param_name with IDENT p -> p in
       (* condition: argument type must match parameter type *)
       match (param_type, get_expr_type arg) with
-      | INT, Some INT -> []
-      | BOOL, Some BOOL -> []
+      | INT, Some (DTYPE INT) -> []
+      | BOOL, Some (DTYPE BOOL) -> []
       | _, Some dt ->
           [
             Utils.format_msg pos
@@ -608,7 +625,7 @@ and compare_params_with_args (params : Parser.param_list)
                   '%s'!"
                  pname
                  (Lexer.format_dtype param_type)
-                 (Lexer.format_dtype dt) func_name);
+                 (format_expr_type dt) func_name);
           ]
       | _, None ->
           [
