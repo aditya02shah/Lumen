@@ -603,6 +603,15 @@ and match_func_decl (tokens : Lexer.located_token list) :
   | (VOID, pos) :: (IDENTIFIER fname, _) :: (L_PAREN, _) :: rem ->
       match_func_decl_helper rem (VOID, pos) fname false pos
   (* --invalid paths-- *)
+  | (OPTION, pos) :: (VOID, _) :: r ->
+      (* void function can't be optional *)
+      ( None,
+        tokens,
+        [
+          Utils.format_msg pos
+            "Function declaration: void cannot be used as an optional return \
+             type!";
+        ] )
   | (OPTION, pos)
     :: (Lexer.DATATYPE d, _)
     :: (IDENTIFIER fname, _)
