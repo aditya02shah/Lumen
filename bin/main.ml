@@ -1,35 +1,41 @@
-(* let path = Sys.argv.(1)
-let prog = Io.read_file path
-let tokens, errors = Lexer.tokenize prog
+let interpret_program (path : string) : unit =
+  (* lex *)
+  let tokens, lexer_errors = Lexer.tokenize path in
 
+  print_endline "\n=== Lexer Errors ===";
+  print_endline
+    (if lexer_errors = [] then "None"
+     else
+       String.concat "\n"
+         (List.map
+            (fun (token, line) ->
+              Printf.sprintf "Line %d: %s" line (Lexer.format_token token))
+            lexer_errors));
+
+  if lexer_errors <> [] then ()
+  else
+    (* parse *)
+    let prog, remaining, parse_errs = Parser.parse_prog tokens in
+
+    print_endline "\n=== Parser Errors ===";
+    print_endline
+      (if parse_errs = [] then "None" else String.concat "\n" parse_errs);
+
+    if parse_errs <> [] then ()
+    else
+      (* semantic check *)
+      let semantic_errors = Semantic_check.check_prog prog in
+
+      print_endline "\n=== Semantic Errors ===";
+      print_endline
+        (if semantic_errors = [] then "None"
+         else String.concat "\n" semantic_errors);
+
+      if semantic_errors <> [] then () else ()
+
+(* --MAIN-- *)
 let () =
-  Lexer.print_list Lexer.format_token tokens;
-
-  match errors with
-  | [] -> ()
-  | _ ->
-      print_string "\nERRORS:\n";
-      Lexer.print_list Lexer.format_token errors *)
-
-(* let tokens2 =
-  [ Lexer.NUMBER 2; Lexer.MULTIPLY; Lexer.NUMBER 3; Lexer.ADD; Lexer.NUMBER 5 ] *)
-(* let tokens2 = [ Lexer.NUMBER 2; Lexer.ADD; Lexer.NUMBER 3 ] *)
-let tokens2 =
-  [
-    Lexer.NUMBER 2;
-    Lexer.MULTIPLY;
-    Lexer.NUMBER 3;
-    Lexer.ADD;
-    Lexer.NUMBER 5;
-    Lexer.DIVIDE;
-    Lexer.NUMBER 7;
-    Lexer.ADD;
-    Lexer.NUMBER 10;
-    Lexer.DIVIDE;
-    Lexer.NUMBER 11;
-  ]
-
-let () =
-  match Parser.match_expr tokens2 with
-  | [], _ -> print_endline "not found"
-  | es, _ -> List.iter (fun e -> print_endline (Parser.format_expr e)) es
+  let path =
+    if Array.length Sys.argv > 1 then Sys.argv.(1) else "examples/for.sui"
+  in
+  interpret_program path
