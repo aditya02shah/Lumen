@@ -1,132 +1,11 @@
+(* --EXCEPTIONS-- *)
 exception Invalid_expr
 
 (* --TYPE DECLARATIONS-- *)
 type parser_errors = string list
 
-(* Basic Units *)
-type ident = IDENT of string
-type value_node = IDENTIFIER of ident | NUMBER of int
-
-type value = value_node * Lexer.position
-
-(* Variables *)
-
-(* variable declaration *)
-and decl = decl_node * Lexer.position
-and decl_node = { mut : bool; dtype : Lexer.dtype; vars : ident list }
-
-(* variable assignment *)
-and asst = asst_node * Lexer.position
-and decl_asst = decl_asst_node * Lexer.position
-and asst_node = { name : ident; expr : expr }
-and decl_asst_node = { mut : bool; dtype : Lexer.dtype; asst : asst }
-
-and var_decl =
-  | DECL of decl (* declaration only *)
-  | DECL_ASST of decl_asst (* declaration and assignment in same statement *)
-
-(* variable initialisation *)
-and var_init = var_init_node * Lexer.position
-and var_init_node = ASST of asst | DECL_ASST of decl_asst
-
-(* Expression *)
-and expr = expr_node * Lexer.position
-
-and expr_node =
-  | INT of int
-  | VAR of ident
-  | INCREMENT of ident
-  | FUNC_CALL of func_call
-  | BINARY of arithmetic_op * expr * expr
-  | COND of cond_expr
-
-and arithmetic_op = ADD | MULTIPLY | SUBTRACT | DIVIDE | MOD | POW
-
-(* conditional expression *)
-and cond_expr = BOOL_VAL of bool_value | COMBINATION of combination
-and bool_value = bool_value_node * Lexer.position
-
-and bool_value_node =
-  | BOOL of bool
-  | VAL_CMP of logical_compare * value * value
-
-and logical_combination = LOGICAL_AND | LOGICAL_OR
-and combination = combination_node * Lexer.position
-and combination_node = logical_combination * cond_expr * cond_expr
-
-and logical_compare =
-  | LESS_THAN
-  | LESS_THAN_EQUALS
-  | GREATER_THAN
-  | GREATER_THAN_EQUALS
-  | EQUALS
-  | NOT_EQUALS
-
-(* Functions *)
-
-(* function declaration *)
-and func_decl = func_decl_node * Lexer.position
-
-and func_decl_node = {
-  func_name : ident;
-  return_type : ret_type;
-  is_optional_type : bool;
-  params : param_list;
-  body : block;
-}
-
-(* return expression *)
-and ret_expr = ret_expr_node * Lexer.position
-and ret_expr_node = EXPR of expr | SOME_EXPR of expr | NONE
-and ret_type = ret_type_node * Lexer.position
-and ret_type_node = DATATYPE of Lexer.dtype | VOID
-
-(* params *)
-and param_list = (Lexer.dtype * ident) list
-
-(* function call *)
-and func_call = func_call_node * Lexer.position
-and func_call_node = { func_name : ident; args : arg_list }
-and arg_list = expr list
-
-(* Statement *)
-and stmt =
-  | VARDECL of var_decl
-  | ASST of asst
-  | LOOP of loop
-  | IF of if_stmt
-  | IF_ELSE of if_stmt * else_stmt
-  | RETURN of ret_expr
-  | EXP of expr
-  | EMPTY
-
-and if_stmt = cond_expr * block
-and else_stmt = block
-
-(* Block *)
-and block = block_node * Lexer.position
-and block_node = STMTS of stmt list
-
-(* Loops *)
-and loop = loop_node * Lexer.position
-and loop_node = WHILE of while_loop | FOR of for_loop
-
-(* while loop *)
-and while_loop = { cond : cond_expr; body : block }
-
-(* for loop *)
-and for_loop = {
-  init : var_init;
-  cond : cond_expr;
-  update : expr;
-  body : block;
-}
-
-(* Program *)
-type prog = func_decl list
-
 (* --HELPER FUNCTIONS-- *)
-let rec format_expr expr =
+let rec format_expr (expr : Ast.expr) =
   match expr with
   | INT n, _ -> Printf.sprintf "INT(%d)" n
   | INCREMENT (IDENT i), _ -> Printf.sprintf "INCREMENT IDENT(%s)" i
@@ -146,7 +25,8 @@ let rec format_expr expr =
       Printf.sprintf "BINARY(%s, %s, %s)" op_str (format_expr e1)
         (format_expr e2)
 
-let construct_expr (op : Lexer.located_token) (op1 : expr) (op2 : expr) : expr =
+let construct_expr (op : Lexer.located_token) (op1 : Ast.expr) (op2 : Ast.expr)
+    : Ast.expr =
   match op with
   | ADD, pos -> (BINARY (ADD, op1, op2), pos)
   | SUBTRACT, pos -> (BINARY (SUBTRACT, op1, op2), pos)
@@ -159,7 +39,7 @@ let construct_expr (op : Lexer.located_token) (op1 : expr) (op2 : expr) : expr =
 (* --PARSER IMPLEMENTATION-- *)
 (* Basic Units *)
 let match_value (tokens : Lexer.located_token list) :
-    value option * Lexer.located_token list * parser_errors =
+    Ast.value option * Lexer.located_token list * parser_errors =
   (* value -> IDENTIFIER | INT | BOOLEAN *)
 
   (* --valid paths-- *)
@@ -181,7 +61,7 @@ let match_value (tokens : Lexer.located_token list) :
 (* Variables *)
 (* variable declaration *)
 let rec match_var_decl (tokens : Lexer.located_token list) :
-    var_decl option * Lexer.located_token list * parser_errors =
+    Ast.var_decl option * Lexer.located_token list * parser_errors =
   (* var_decl -> dtype var_name ("," var_name)* ";"
               -> mut dtype var_name ("," var_name)* ";"
               -> decl_asst
@@ -248,7 +128,7 @@ let rec match_var_decl (tokens : Lexer.located_token list) :
           | _ -> (None, tokens, decl_errs)))
 
 and match_var_decl_asst (tokens : Lexer.located_token list) :
-    decl_asst option * Lexer.located_token list * parser_errors =
+    Ast.decl_asst option * Lexer.located_token list * parser_errors =
   (* decl_asst -> dtype asst 
               -> mut dtype asst 
   *)
@@ -283,11 +163,11 @@ and match_var_decl_asst (tokens : Lexer.located_token list) :
   | _ -> (None, tokens, [])
 
 and match_var_decl_helper (tokens : Lexer.located_token list)
-    (dtype : Lexer.dtype) (vname : string) (is_mutable : bool) :
-    var_decl option * Lexer.located_token list * parser_errors =
+    (dtype : Ast.dtype) (vname : string) (is_mutable : bool) :
+    Ast.var_decl option * Lexer.located_token list * parser_errors =
   (* find all var_name declarations matching ("," var_name)* *)
-  let rec loop (t : Lexer.located_token list) (accum : ident list) :
-      var_decl option * Lexer.located_token list * parser_errors =
+  let rec loop (t : Lexer.located_token list) (accum : Ast.ident list) :
+      Ast.var_decl option * Lexer.located_token list * parser_errors =
     match (t, accum) with
     (* --valid paths-- *)
     | (SEMICOLON, pos) :: ts, a :: acs ->
@@ -311,7 +191,7 @@ and match_var_decl_helper (tokens : Lexer.located_token list)
 
 (* variable assignment *)
 and match_asst (tokens : Lexer.located_token list) :
-    asst option * Lexer.located_token list * parser_errors =
+    Ast.asst option * Lexer.located_token list * parser_errors =
   (* asst -> var_name "=" expr ";" *)
   match tokens with
   | (IDENTIFIER name, pos) :: (ASSIGNMENT, _) :: rem -> (
@@ -336,7 +216,7 @@ and match_asst (tokens : Lexer.located_token list) :
         ] )
   | _ -> (None, tokens, [])
 
-and format_asst (a : asst option) : string =
+and format_asst (a : Ast.asst option) : string =
   match a with
   | Some (x, _) ->
       let name_str = match x.name with IDENT n -> n in
@@ -345,7 +225,7 @@ and format_asst (a : asst option) : string =
 
 (* Expression *)
 and match_expr (tokens : Lexer.located_token list) :
-    expr option * Lexer.located_token list * parser_errors =
+    Ast.expr option * Lexer.located_token list * parser_errors =
   (* expr -> ce | term (("+" | "-") term)* *)
 
   (* try to match term *)
@@ -361,8 +241,8 @@ and match_expr (tokens : Lexer.located_token list) :
       | _ -> (None, tokens, []))
   | Some left, rem, term_errs ->
       (* find all possible terms *)
-      let rec loop (t : Lexer.located_token list) (left : expr) :
-          expr option * Lexer.located_token list * parser_errors =
+      let rec loop (t : Lexer.located_token list) (left : Ast.expr) :
+          Ast.expr option * Lexer.located_token list * parser_errors =
         match t with
         (* maintain left-associativity *)
         | ((ADD, _ | SUBTRACT, _) as op) :: r -> (
@@ -376,7 +256,7 @@ and match_expr (tokens : Lexer.located_token list) :
       loop rem left
 
 and match_term (tokens : Lexer.located_token list) :
-    expr option * Lexer.located_token list * parser_errors =
+    Ast.expr option * Lexer.located_token list * parser_errors =
   (* term -> factor (("/" | "*" | "%" | "^") factor)* *)
 
   (* try to match factor *)
@@ -384,8 +264,8 @@ and match_term (tokens : Lexer.located_token list) :
   (* --valid path-- *)
   | Some left, rem, factor_errs ->
       (* find all possible factors *)
-      let rec loop (t : Lexer.located_token list) (left : expr) :
-          expr option * Lexer.located_token list * parser_errors =
+      let rec loop (t : Lexer.located_token list) (left : Ast.expr) :
+          Ast.expr option * Lexer.located_token list * parser_errors =
         match t with
         (* maintain left-associativity *)
         | ((MULTIPLY, pos | DIVIDE, pos | MOD, pos | POW, pos) as op) :: r -> (
@@ -413,7 +293,7 @@ and match_term (tokens : Lexer.located_token list) :
   | None, _, factor_errs -> (None, tokens, factor_errs)
 
 and match_factor (tokens : Lexer.located_token list) :
-    expr option * Lexer.located_token list * parser_errors =
+    Ast.expr option * Lexer.located_token list * parser_errors =
   (* factor -> Identifier | Number | Identifier++ | func_call | "(" expr ")" *)
 
   (* --valid paths-- *)
@@ -452,15 +332,15 @@ and match_factor (tokens : Lexer.located_token list) :
 
 (* conditional expression *)
 and match_cond_expr (tokens : Lexer.located_token list) :
-    cond_expr option * Lexer.located_token list * parser_errors =
+    Ast.cond_expr option * Lexer.located_token list * parser_errors =
   (* cond_expr -> boolval (logical_combination boolval)* *)
 
   (* try to match boolval *)
   match match_boolval tokens with
   | Some bv, rem_tokens, bv_errs ->
       (* try to match all (logical_combination boolval) pairs *)
-      let rec loop (t : Lexer.located_token list) (prev : cond_expr) :
-          cond_expr option * Lexer.located_token list * parser_errors =
+      let rec loop (t : Lexer.located_token list) (prev : Ast.cond_expr) :
+          Ast.cond_expr option * Lexer.located_token list * parser_errors =
         match t with
         (* maintain left associativity *)
         | (LOGICAL_AND, pos) :: r -> (
@@ -501,7 +381,7 @@ and match_cond_expr (tokens : Lexer.located_token list) :
   | _ -> (None, tokens, [])
 
 and match_boolval (tokens : Lexer.located_token list) :
-    cond_expr option * Lexer.located_token list * parser_errors =
+    Ast.cond_expr option * Lexer.located_token list * parser_errors =
   (* 
   boolval -> bool
           -> valcmp
@@ -540,8 +420,8 @@ and match_boolval (tokens : Lexer.located_token list) :
   (* try to match val logical_compare val *)
   | (token, pos) :: rem -> match_valcmp tokens pos
 
-and match_valcmp (tokens : Lexer.located_token list) (pos : Lexer.position) :
-    cond_expr option * Lexer.located_token list * parser_errors =
+and match_valcmp (tokens : Lexer.located_token list) (pos : Ast.position) :
+    Ast.cond_expr option * Lexer.located_token list * parser_errors =
   (* valcmp -> val logical_compare val *)
 
   (* try to match val (operand1)*)
@@ -550,7 +430,7 @@ and match_valcmp (tokens : Lexer.located_token list) (pos : Lexer.position) :
       (* try to match logical_compare operator *)
       let res =
         match tok with
-        | LESS_THAN -> Some LESS_THAN
+        | LESS_THAN -> Some Ast.LESS_THAN
         | LESS_THAN_EQUALS -> Some LESS_THAN_EQUALS
         | GREATER_THAN -> Some GREATER_THAN
         | GREATER_THAN_EQUALS -> Some GREATER_THAN_EQUALS
@@ -586,7 +466,7 @@ and match_valcmp (tokens : Lexer.located_token list) (pos : Lexer.position) :
 (* Functions *)
 (* function declaration *)
 and match_func_decl (tokens : Lexer.located_token list) :
-    func_decl option * Lexer.located_token list * parser_errors =
+    Ast.func_decl option * Lexer.located_token list * parser_errors =
   (* func_decl -> ret_type func_name "(" param_list ")" block 
                -> option ret_type func_name "(" param_list ")" block 
   *)
@@ -666,9 +546,10 @@ and match_func_decl (tokens : Lexer.located_token list) :
         ] )
   | _ -> (None, tokens, [])
 
-and match_func_decl_helper (tokens : Lexer.located_token list) (ret : ret_type)
-    (fname : string) (is_optional : bool) (pos : Lexer.position) :
-    func_decl option * Lexer.located_token list * parser_errors =
+and match_func_decl_helper (tokens : Lexer.located_token list)
+    (ret : Ast.ret_type) (fname : string) (is_optional : bool)
+    (pos : Ast.position) :
+    Ast.func_decl option * Lexer.located_token list * parser_errors =
   (* helps match func_decl -> param_list ")" block *)
 
   (* try to match param_list *)
@@ -708,7 +589,7 @@ and match_func_decl_helper (tokens : Lexer.located_token list) (ret : ret_type)
         @ param_errs )
 
 and match_ret_expr (tokens : Lexer.located_token list) :
-    ret_expr option * Lexer.located_token list * parser_errors =
+    Ast.ret_expr option * Lexer.located_token list * parser_errors =
   (* ret_expr -> return expr ";"  
               -> return Some expr ";"      
               -> return None ";"      
@@ -776,14 +657,14 @@ and match_ret_expr (tokens : Lexer.located_token list) :
   | _ -> (None, tokens, [])
 
 and match_param_list (tokens : Lexer.located_token list) :
-    param_list * Lexer.located_token list * parser_errors =
+    Ast.param_list * Lexer.located_token list * parser_errors =
   (* paramList -> [] | dtype Identifier ("," dtype Identifier)* *)
   match tokens with
   (* --valid paths-- *)
   | (DATATYPE d, _) :: (IDENTIFIER pname, _) :: rem ->
       (* try to match dtype *)
-      let rec loop (t : Lexer.located_token list) (accum : param_list) :
-          param_list * Lexer.located_token list * parser_errors =
+      let rec loop (t : Lexer.located_token list) (accum : Ast.param_list) :
+          Ast.param_list * Lexer.located_token list * parser_errors =
         (* match all possible (dtype identifier) pairs *)
         match t with
         | (COMMA, _) :: (DATATYPE dt, _) :: (IDENTIFIER p, _) :: r ->
@@ -833,8 +714,8 @@ and match_param_list (tokens : Lexer.located_token list) :
   | _ -> ([], tokens, [])
 
 (* function call *)
-and match_func_call (tokens : Lexer.located_token list) (pos : Lexer.position) :
-    func_call option * Lexer.located_token list * parser_errors =
+and match_func_call (tokens : Lexer.located_token list) (pos : Ast.position) :
+    Ast.func_call option * Lexer.located_token list * parser_errors =
   (* func_call -> func_name "(" arg_list ")" ";" *)
 
   (* try to match func_name *)
@@ -883,16 +764,16 @@ and match_func_call (tokens : Lexer.located_token list) (pos : Lexer.position) :
   | [] ->
       (None, tokens, [ Utils.format_msg pos "Function call: invalid syntax!" ])
 
-and match_arg_list (tokens : Lexer.located_token list) (pos : Lexer.position) :
-    arg_list option * Lexer.located_token list * parser_errors =
+and match_arg_list (tokens : Lexer.located_token list) (pos : Ast.position) :
+    Ast.arg_list option * Lexer.located_token list * parser_errors =
   (* arg_list -> [] | expr ("," expr)* *)
   (* try to match expr *)
   match match_expr tokens with
   | Some e, [], _ -> (Some [ e ], [], [])
   | Some e, rem, exp1_errs ->
       (* match as as many (",", expr) pairs *)
-      let rec loop (t : Lexer.located_token list) (accum : arg_list) :
-          arg_list option * Lexer.located_token list * parser_errors =
+      let rec loop (t : Lexer.located_token list) (accum : Ast.arg_list) :
+          Ast.arg_list option * Lexer.located_token list * parser_errors =
         match t with
         (* try to match comma *)
         | (COMMA, _) :: ts -> (
@@ -932,10 +813,10 @@ and match_arg_list (tokens : Lexer.located_token list) (pos : Lexer.position) :
 
 (* Statement *)
 and match_stmt (tokens : Lexer.located_token list) :
-    stmt list * Lexer.located_token list * parser_errors =
+    Ast.stmt list * Lexer.located_token list * parser_errors =
   (* stmt -> (var_decl | asst | loop | expr ";") | func_call | ctrl_flow)* *)
-  let rec loop (t : Lexer.located_token list) (accum : stmt list) :
-      stmt list * Lexer.located_token list * parser_errors =
+  let rec loop (t : Lexer.located_token list) (accum : Ast.stmt list) :
+      Ast.stmt list * Lexer.located_token list * parser_errors =
     (* match all valid stmts *)
     match match_stmt_helper t with
     | Some st, r, _ -> loop r (st :: accum)
@@ -947,7 +828,7 @@ and match_stmt (tokens : Lexer.located_token list) :
   loop tokens []
 
 and match_stmt_helper (tokens : Lexer.located_token list) :
-    stmt option * Lexer.located_token list * parser_errors =
+    Ast.stmt option * Lexer.located_token list * parser_errors =
   (* match a single statement (stmt = (var_decl | asst | loop | expr ";" | return expr ";" | func_call | ctrl_flow )* *)
 
   (* try to match var_decl *)
@@ -987,7 +868,7 @@ and match_stmt_helper (tokens : Lexer.located_token list) :
 
 and match_ctrl_flow (tokens : Lexer.located_token list)
     (prev_errs : parser_errors) :
-    stmt option * Lexer.located_token list * parser_errors =
+    Ast.stmt option * Lexer.located_token list * parser_errors =
   (* ctrl_flow -> if cond block 
                -> if cond block else block
   *)
@@ -1033,7 +914,7 @@ and match_ctrl_flow (tokens : Lexer.located_token list)
 
 (* Block *)
 and match_block (tokens : Lexer.located_token list) :
-    block option * Lexer.located_token list * parser_errors =
+    Ast.block option * Lexer.located_token list * parser_errors =
   (* block -> "{" stmt "}" *)
   match tokens with
   (* try to match "{" *)
@@ -1054,7 +935,7 @@ and match_block (tokens : Lexer.located_token list) :
 
 (* Loops *)
 and match_loop (tokens : Lexer.located_token list) :
-    loop option * Lexer.located_token list * parser_errors =
+    Ast.loop option * Lexer.located_token list * parser_errors =
   (* loop -> while cond_expr block 
           -> for "(" var_init  cond_expr ";" update_expr ")" block
 
@@ -1070,7 +951,7 @@ and match_loop (tokens : Lexer.located_token list) :
           (* try to match block *)
           match match_block rem with
           | Some b, r, blk_errs ->
-              let loop = { cond = exp; body = b } in
+              let loop = { Ast.cond = exp; body = b } in
               (Some (WHILE loop, pos), r, ce_errs)
           | _, _, blk_errs ->
               ( None,
@@ -1112,8 +993,8 @@ and match_loop (tokens : Lexer.located_token list) :
         ] )
   | _ -> (None, tokens, [])
 
-and for_loop_helper (tokens : Lexer.located_token list) (init : var_init) :
-    loop option * Lexer.located_token list * parser_errors =
+and for_loop_helper (tokens : Lexer.located_token list) (init : Ast.var_init) :
+    Ast.loop option * Lexer.located_token list * parser_errors =
   (* helps match cond_expr ";" update_expr ")" block *)
 
   (* try to match cond_expr ";" *)
@@ -1166,15 +1047,15 @@ and for_loop_helper (tokens : Lexer.located_token list) (init : var_init) :
 (* --PUBLIC INTERFACE-- *)
 (* Program *)
 let parse_prog (tokens : Lexer.located_token list) :
-    prog * Lexer.located_token list * parser_errors =
+    Ast.prog * Lexer.located_token list * parser_errors =
   (* prog -> func_decl* *)
 
   (* remove whitespace *)
   let tok = List.filter (fun (tok, pos) -> tok != Lexer.WHITESPACE) tokens in
 
   (* collect all the function declarations *)
-  let rec loop (t : Lexer.located_token list) (accum : func_decl list) :
-      prog * Lexer.located_token list * parser_errors =
+  let rec loop (t : Lexer.located_token list) (accum : Ast.func_decl list) :
+      Ast.prog * Lexer.located_token list * parser_errors =
     match match_func_decl t with
     | Some (fd, pos), r, _ -> loop r ((fd, pos) :: accum)
     | _, _, fd_errs -> (

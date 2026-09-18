@@ -2,17 +2,17 @@
 type semantic_errors = string list
 
 (* Variables *)
-type asst_val = NONE | EXPR of Parser.expr
-type var_details = { mut : bool; dtype : Lexer.dtype; assigned_val : asst_val }
+type asst_val = NONE | EXPR of Ast.expr
+type var_details = { mut : bool; dtype : Ast.dtype; assigned_val : asst_val }
 
 (* Expressions *)
-type expr_type = DTYPE of Lexer.dtype | OPTION_DTYPE of Lexer.dtype | VOID
+type expr_type = DTYPE of Ast.dtype | OPTION_DTYPE of Ast.dtype | VOID
 
 (* Functions *)
 type func_details = {
   is_optional_type : bool;
-  ret_type : Parser.ret_type;
-  params : Parser.param_list;
+  ret_type : Ast.ret_type;
+  params : Ast.param_list;
 }
 
 (* --GLOBAL VARS-- *)
@@ -22,7 +22,7 @@ let func_env = Hashtbl.create 100 (* maps func -> func_details *)
 (* --HELPER FUNCTIONS-- *)
 let format_expr_type (etype : expr_type) =
   match etype with
-  | DTYPE d -> Lexer.format_dtype d
+  | DTYPE d -> Ast.format_dtype d
   | OPTION_DTYPE d -> (
       match d with
       | INT -> "dtype('Option<Int>')"
@@ -32,7 +32,7 @@ let format_expr_type (etype : expr_type) =
 (* --SEMANTIC CHECKER IMPLEMENTATION-- *)
 (* Variables *)
 (* variable declaration *)
-let rec check_var_decl (var_decl : Parser.var_decl) : semantic_errors =
+let rec check_var_decl (var_decl : Ast.var_decl) : semantic_errors =
   match var_decl with
   | DECL (d, _) ->
       let decl_mut, decl_type = (d.mut, d.dtype) in
@@ -45,7 +45,7 @@ let rec check_var_decl (var_decl : Parser.var_decl) : semantic_errors =
       []
   | DECL_ASST da -> check_decl_asst da
 
-and check_decl_asst (decl_asst : Parser.decl_asst) : semantic_errors =
+and check_decl_asst (decl_asst : Ast.decl_asst) : semantic_errors =
   match decl_asst with
   | da, _ -> (
       match da.asst with
@@ -57,7 +57,7 @@ and check_decl_asst (decl_asst : Parser.decl_asst) : semantic_errors =
           check_asst da.asst true)
 
 (* variable assignment *)
-and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
+and check_asst (asst : Ast.asst) (is_decl_asst : bool) : semantic_errors =
   (* condition: var must be defined *)
   match asst with
   | at, pos -> (
@@ -83,7 +83,7 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
                         (Printf.sprintf
                            "Assignment: variable %s and expression %s do not \
                             match!"
-                           (Lexer.format_dtype dt1) (format_expr_type dt2));
+                           (Ast.format_dtype dt1) (format_expr_type dt2));
                     ]
                 | dt, None ->
                     (* type mismatch *)
@@ -92,7 +92,7 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
                         (Printf.sprintf
                            "Assignment: variable %s and expression \
                             dtype('none') do not match!"
-                           (Lexer.format_dtype dt));
+                           (Ast.format_dtype dt));
                     ])
             | expr_errs ->
                 (* var is being assigned an invalid expression *)
@@ -115,7 +115,7 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
           ])
 
 (* Expression *)
-and check_expr (expr : Parser.expr) : semantic_errors =
+and check_expr (expr : Ast.expr) : semantic_errors =
   match expr with
   | VAR var, pos -> (
       let var_name = match var with IDENT vname -> vname in
@@ -165,7 +165,7 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                              "Expression: Increment operation requires integer \
                               variable. Variable '%s' has %s!"
                              var_name
-                             (Lexer.format_dtype ent.dtype));
+                             (Ast.format_dtype ent.dtype));
                       ])
               | NONE ->
                   (* var has not been assigned a value *)
@@ -239,7 +239,7 @@ and check_expr (expr : Parser.expr) : semantic_errors =
   | _ -> []
 
 (* conditional expression *)
-and check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
+and check_cond_expr (cond_expr : Ast.cond_expr) : semantic_errors =
   match cond_expr with
   | BOOL_VAL (VAL_CMP (op, val1, val2), pos) -> (
       (* condition: logical_compare operands must be integer literals/variables *)
@@ -253,7 +253,7 @@ and check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
   | COMBINATION ((cm, ce1, ce2), _) -> check_cond_expr ce1 @ check_cond_expr ce2
   | _ -> []
 
-and check_var_in_expr (var : Parser.ident) (pos : Lexer.position)
+and check_var_in_expr (var : Ast.ident) (pos : Ast.position)
     (errs : semantic_errors) (prefix : string) : semantic_errors =
   let var_name = match var with IDENT vname -> vname in
   match Hashtbl.find_opt var_env var with
@@ -270,7 +270,7 @@ and check_var_in_expr (var : Parser.ident) (pos : Lexer.position)
                 (Printf.sprintf
                    "%s: requires integer operands. Variable '%s' has %s!" prefix
                    var_name
-                   (Lexer.format_dtype ent.dtype))
+                   (Ast.format_dtype ent.dtype))
               :: errs)
       | NONE ->
           (* var has not been assigned a value *)
@@ -285,8 +285,8 @@ and check_var_in_expr (var : Parser.ident) (pos : Lexer.position)
            var_name)
       :: errs
 
-and check_binary_operation (var1 : Parser.ident) (var2 : Parser.ident)
-    (msg_prefix : string) (pos : Lexer.position) : semantic_errors =
+and check_binary_operation (var1 : Ast.ident) (var2 : Ast.ident)
+    (msg_prefix : string) (pos : Ast.position) : semantic_errors =
   let var_name1 = match var1 with IDENT vname -> vname in
   let var_name2 = match var2 with IDENT vname -> vname in
   (* condition: both the variables must be defined and assigned a value *)
@@ -308,9 +308,9 @@ and check_binary_operation (var1 : Parser.ident) (var2 : Parser.ident)
                      "%s requires integer operands. Variable '%s' has '%s' and \
                       variable '%s' has '%s'!"
                      msg_prefix var_name1
-                     (Lexer.format_dtype ent1.dtype)
+                     (Ast.format_dtype ent1.dtype)
                      var_name2
-                     (Lexer.format_dtype ent2.dtype));
+                     (Ast.format_dtype ent2.dtype));
               ])
       (* --invalid paths-- *)
       | EXPR e, NONE ->
@@ -351,7 +351,7 @@ and check_binary_operation (var1 : Parser.ident) (var2 : Parser.ident)
              msg_prefix var_name1 var_name2);
       ]
 
-and get_expr_type (expr : Parser.expr) : expr_type option =
+and get_expr_type (expr : Ast.expr) : expr_type option =
   (* returns the type for an expression if it can be determined, None otherwise *)
   (* NOTE: assumes expr has already been checked *)
   match expr with
@@ -374,8 +374,8 @@ and get_expr_type (expr : Parser.expr) : expr_type option =
   | BINARY (_, _, _), _ -> Some (DTYPE INT)
   | COND _, _ -> Some (DTYPE BOOL)
 
-and get_ret_expr_in_blk (func_blk : Parser.block) (include_sub_blocks : bool) :
-    Parser.ret_expr list =
+and get_ret_expr_in_blk (func_blk : Ast.block) (include_sub_blocks : bool) :
+    Ast.ret_expr list =
   (* returns all the return expressions present in a block *)
   if include_sub_blocks then
     (* check all sub-blocks *)
@@ -385,13 +385,13 @@ and get_ret_expr_in_blk (func_blk : Parser.block) (include_sub_blocks : bool) :
         List.fold_left
           (fun acc st ->
             match st with
-            | Parser.RETURN re -> acc @ [ re ]
+            | Ast.RETURN re -> acc @ [ re ]
             (* if stmt contains subblocks, explore them *)
-            | Parser.IF (cond, blk) -> acc @ get_ret_expr_in_blk blk true
-            | Parser.IF_ELSE ((cond, if_blk), else_blk) ->
+            | Ast.IF (cond, blk) -> acc @ get_ret_expr_in_blk blk true
+            | Ast.IF_ELSE ((cond, if_blk), else_blk) ->
                 (acc @ get_ret_expr_in_blk if_blk true)
                 @ get_ret_expr_in_blk else_blk true
-            | Parser.LOOP lp -> (
+            | Ast.LOOP lp -> (
                 match lp with
                 | WHILE lp, _ -> acc @ get_ret_expr_in_blk lp.body true
                 | FOR lp, _ -> acc @ get_ret_expr_in_blk lp.body true)
@@ -405,10 +405,10 @@ and get_ret_expr_in_blk (func_blk : Parser.block) (include_sub_blocks : bool) :
         List.rev
           (List.fold_left
              (fun acc st ->
-               match st with Parser.RETURN re -> re :: acc | _ -> acc)
+               match st with Ast.RETURN re -> re :: acc | _ -> acc)
              [] stmts)
 
-and check_ret_expr (ret_expr : Parser.ret_expr) : semantic_errors =
+and check_ret_expr (ret_expr : Ast.ret_expr) : semantic_errors =
   (* checks expression present in return expression statement *)
   match ret_expr with
   | EXPR e, _ | SOME_EXPR e, _ -> check_expr e
@@ -416,7 +416,7 @@ and check_ret_expr (ret_expr : Parser.ret_expr) : semantic_errors =
 
 (* Functions *)
 (* function declaration *)
-and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
+and check_func_decl (func_decl : Ast.func_decl) : semantic_errors =
   (* store func_decl *)
   match func_decl with
   | func, f_pos -> (
@@ -473,7 +473,7 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
                                                  expression of %s doesn't \
                                                  match declared %s!"
                                                 fname
-                                                (Lexer.format_dtype func_rettype)
+                                                (Ast.format_dtype func_rettype)
                                                 (format_expr_type dt));
                                          ]
                                      | _, None ->
@@ -484,7 +484,7 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
                                                  expression of dtype('none') \
                                                  doesn't match declared  %s!"
                                                 fname
-                                                (Lexer.format_dtype func_rettype));
+                                                (Ast.format_dtype func_rettype));
                                          ])
                                  | (NONE, e_pos), true -> []
                                  | (EXPR e, e_pos), true -> (
@@ -550,7 +550,7 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
       | fd_errs -> fd_errs)
 
 (* function call *)
-and check_func_call (func_call : Parser.func_call) : semantic_errors =
+and check_func_call (func_call : Ast.func_call) : semantic_errors =
   match func_call with
   | func, pos -> (
       let fname = match func.func_name with IDENT f -> f in
@@ -573,10 +573,10 @@ and check_func_call (func_call : Parser.func_call) : semantic_errors =
                  fname);
           ])
 
-and check_func_block (block : Parser.block) (func_name : string) :
-    semantic_errors =
+and check_func_block (block : Ast.block) (func_name : string) : semantic_errors
+    =
   (* condition: each block should contain a maximum of 1 return expression *)
-  let rec check_sub_blocks (stmts : Parser.stmt list) : semantic_errors =
+  let rec check_sub_blocks (stmts : Ast.stmt list) : semantic_errors =
     match stmts with
     | [] -> []
     | s :: st -> (
@@ -610,9 +610,8 @@ and check_func_block (block : Parser.block) (func_name : string) :
                  func_name);
           ])
 
-and compare_params_with_args (params : Parser.param_list)
-    (args : Parser.arg_list) (pos : Lexer.position) (func_name : string) :
-    semantic_errors =
+and compare_params_with_args (params : Ast.param_list) (args : Ast.arg_list)
+    (pos : Ast.position) (func_name : string) : semantic_errors =
   (* helper function which compares parameters & arguments *)
   (* Note: each argument should already be checked *)
   match (params, args) with
@@ -630,7 +629,7 @@ and compare_params_with_args (params : Parser.param_list)
                   Parameter '%s' has '%s' and argument has '%s' in call to \
                   '%s'!"
                  pname
-                 (Lexer.format_dtype param_type)
+                 (Ast.format_dtype param_type)
                  (format_expr_type dt) func_name);
           ]
       | _, None ->
@@ -641,7 +640,7 @@ and compare_params_with_args (params : Parser.param_list)
                   Parameter '%s' has '%s' and argument has dtype('none') in \
                   call to '%s' !"
                  pname
-                 (Lexer.format_dtype param_type)
+                 (Ast.format_dtype param_type)
                  func_name);
           ])
   | [], [] -> []
@@ -656,7 +655,7 @@ and compare_params_with_args (params : Parser.param_list)
       ]
 
 (* Statement *)
-and check_stmt (stmt : Parser.stmt) : semantic_errors =
+and check_stmt (stmt : Ast.stmt) : semantic_errors =
   (* check stmt *)
   match stmt with
   | VARDECL vd -> check_var_decl vd
@@ -673,14 +672,14 @@ and check_stmt (stmt : Parser.stmt) : semantic_errors =
   | EMPTY -> []
 
 (* Block *)
-and check_block (block : Parser.block) : semantic_errors =
+and check_block (block : Ast.block) : semantic_errors =
   (* check each statement in block *)
   match block with
   | STMTS stmts, _ ->
       List.fold_left (fun acc st -> acc @ check_stmt st) [] stmts
 
 (* Loops *)
-and check_loop (loop : Parser.loop) : semantic_errors =
+and check_loop (loop : Ast.loop) : semantic_errors =
   match loop with
   (* check while loop *)
   | WHILE while_lp, _ ->
@@ -698,7 +697,7 @@ and check_loop (loop : Parser.loop) : semantic_errors =
 
 (* --PUBLIC INTERFACE-- *)
 (* Program *)
-let rec check_prog (program : Parser.prog) : semantic_errors =
+let rec check_prog (program : Ast.prog) : semantic_errors =
   (* check all the functions in the program *)
   match program with
   | [] -> []

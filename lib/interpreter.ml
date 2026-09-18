@@ -12,7 +12,7 @@ let rec pow (base : int) (exp : int) : int =
   else if exp = 0 then 1
   else base * pow base (exp - 1)
 
-let rec eval_cond_expr (cond_expr : Parser.cond_expr) : bool =
+let rec eval_cond_expr (cond_expr : Ast.cond_expr) : bool =
   (* evaluate conditional expression *)
   match cond_expr with
   | BOOL_VAL (bv, _) -> (
@@ -35,7 +35,7 @@ let rec eval_cond_expr (cond_expr : Parser.cond_expr) : bool =
       | LOGICAL_OR, false, false -> false
       | LOGICAL_OR, _, _ -> true)
 
-let rec eval_expr ((expr, pos) : Parser.expr) : eval_value =
+let rec eval_expr ((expr, pos) : Ast.expr) : eval_value =
   (* evaluate expression *)
   match expr with
   | INT n -> INT n
