@@ -5,6 +5,9 @@ type semantic_errors = string list
 type asst_val = NONE | EXPR of Parser.expr
 type var_details = { mut : bool; dtype : Lexer.dtype; assigned_val : asst_val }
 
+(* Expressions *)
+type expr_type = DTYPE of Lexer.dtype | OPTION_DTYPE of Lexer.dtype | VOID
+
 (* Functions *)
 type func_details = {
   is_optional_type : bool;

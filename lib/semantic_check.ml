@@ -35,8 +35,8 @@ let format_expr_type (etype : expr_type) =
 let rec check_var_decl (var_decl : Parser.var_decl) : semantic_errors =
   match var_decl with
   | DECL (d, _) ->
-      (* store variable declaration *)
       let decl_mut, decl_type = (d.mut, d.dtype) in
+      (* store all the variables declared *)
       List.iter
         (fun var_name ->
           Hashtbl.replace var_env var_name
@@ -46,11 +46,11 @@ let rec check_var_decl (var_decl : Parser.var_decl) : semantic_errors =
   | DECL_ASST da -> check_decl_asst da
 
 and check_decl_asst (decl_asst : Parser.decl_asst) : semantic_errors =
-  (* store declaration *)
   match decl_asst with
   | da, _ -> (
       match da.asst with
       | at, _ ->
+          (* store variable *)
           Hashtbl.replace var_env at.name
             { mut = da.mut; dtype = da.dtype; assigned_val = EXPR at.expr };
           (* check asst *)
@@ -61,20 +61,23 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
   (* condition: var must be defined *)
   match asst with
   | at, pos -> (
+      (* check whether var entry exists in our env *)
       let var_name = match at.name with IDENT vname -> vname in
       match Hashtbl.find_opt var_env at.name with
       | Some ent ->
           if
-            (* condition: var must be mutable *)
+            (* condition: var must be mutable or it is must be a declaration assignment *)
             is_decl_asst = true || ent.mut = true
           then
             (* check the expr variable is being assigned to *)
             match check_expr at.expr with
             | [] -> (
+                (* condition: expression type must match type of var being assigned to *)
                 match (ent.dtype, get_expr_type at.expr) with
                 | INT, Some (DTYPE INT) -> []
-                | BOOL, Some (DTYPE INT) -> []
+                | BOOL, Some (DTYPE BOOL) -> []
                 | dt1, Some dt2 ->
+                    (* type mismatch *)
                     [
                       Utils.format_msg pos
                         (Printf.sprintf
@@ -83,6 +86,7 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
                            (Lexer.format_dtype dt1) (format_expr_type dt2));
                     ]
                 | dt, None ->
+                    (* type mismatch *)
                     [
                       Utils.format_msg pos
                         (Printf.sprintf
@@ -91,9 +95,11 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
                            (Lexer.format_dtype dt));
                     ])
             | expr_errs ->
+                (* var is being assigned an invalid expression *)
                 Utils.format_msg pos "Assignment: contains invalid expression!"
                 :: expr_errs
           else
+            (* assigning to immutable var *)
             [
               Utils.format_msg pos
                 (Printf.sprintf
@@ -101,6 +107,7 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
                    var_name);
             ]
       | _ ->
+          (* var entry doesn't exist in our env *)
           [
             Utils.format_msg pos
               (Printf.sprintf "Assignment: contains an undefined variable '%s'!"
@@ -108,17 +115,19 @@ and check_asst (asst : Parser.asst) (is_decl_asst : bool) : semantic_errors =
           ])
 
 (* Expression *)
-
 and check_expr (expr : Parser.expr) : semantic_errors =
   match expr with
   | VAR var, pos -> (
       let var_name = match var with IDENT vname -> vname in
       (* condition: var must be defined and assigned a value *)
       match Hashtbl.find_opt var_env var with
+      (* check whether var entry exists in our env *)
       | Some ent -> (
+          (* check whether unassigned var is being used in the expression *)
           match ent.assigned_val with
           | EXPR e -> []
           | NONE ->
+              (* var is not assigned a value *)
               [
                 Utils.format_msg pos
                   (Printf.sprintf
@@ -126,6 +135,7 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                      var_name);
               ])
       | _ ->
+          (* var entry doesn't exist in our env *)
           [
             Utils.format_msg pos
               (Printf.sprintf "Expression: contains an undefined variable '%s'!"
@@ -136,6 +146,7 @@ and check_expr (expr : Parser.expr) : semantic_errors =
       let var_name = match var with IDENT vname -> vname in
       (* condition: var must be defined and assigned a value *)
       match Hashtbl.find_opt var_env var with
+      (* check whether var entry exists in our env *)
       | Some ent -> (
           (* condition: var must be mutable *)
           match ent.mut with
@@ -143,9 +154,11 @@ and check_expr (expr : Parser.expr) : semantic_errors =
               match ent.assigned_val with
               (* condition: var must be an integer variable *)
               | EXPR e -> (
+                  (* check var dtype *)
                   match ent.dtype with
                   | INT -> []
                   | _ ->
+                      (* var has non-int dtype *)
                       [
                         Utils.format_msg pos
                           (Printf.sprintf
@@ -155,6 +168,7 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                              (Lexer.format_dtype ent.dtype));
                       ])
               | NONE ->
+                  (* var has not been assigned a value *)
                   [
                     Utils.format_msg pos
                       (Printf.sprintf
@@ -162,6 +176,7 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                          var_name);
                   ])
           | false ->
+              (* var is immutable *)
               [
                 Utils.format_msg pos
                   (Printf.sprintf
@@ -169,6 +184,7 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                      var_name);
               ])
       | _ ->
+          (* var entry doesn't exist in our env *)
           [
             Utils.format_msg pos
               (Printf.sprintf "Expression: contains an undefined variable '%s'!"
@@ -184,45 +200,22 @@ and check_expr (expr : Parser.expr) : semantic_errors =
       | (VAR var1, _), (VAR var2, _) ->
           check_binary_operation var1 var2 "Expression: arithmetic expression"
             pos
-      | (VAR var, pos), e | e, (VAR var, pos) -> (
-          let var_name = match var with IDENT vname -> vname in
-          (* check whether var is defined *)
-          match Hashtbl.find_opt var_env var with
-          | Some ent -> (
-              (* check whether var is assigned a value *)
-              match ent.assigned_val with
-              | EXPR e -> (
-                  match ent.dtype with
-                  | INT -> check_expr e
-                  | _ ->
-                      Utils.format_msg pos
-                        (Printf.sprintf
-                           "Expression: arithmetic operation requires integer \
-                            operands. Variable '%s' has %s!"
-                           var_name
-                           (Lexer.format_dtype ent.dtype))
-                      :: check_expr e)
-              | NONE ->
-                  Utils.format_msg pos
-                    (Printf.sprintf
-                       "Expression: contains an unassigned variable '%s'!"
-                       var_name)
-                  :: check_expr e)
-          | _ ->
-              Utils.format_msg pos
-                (Printf.sprintf
-                   "Expression: contains an undefined variable '%s'!" var_name)
-              :: check_expr e)
+      | (VAR var, pos), e | e, (VAR var, pos) ->
+          check_var_in_expr var pos (check_expr e)
+            "Expression: arithmetic operation "
       (* check func_call *)
       | (FUNC_CALL (f, _), pos), e | e, (FUNC_CALL (f, _), pos) -> (
           (* condition: only integer functions must be used in arithmetic expressions *)
           let fname = match f.func_name with IDENT f -> f in
           (* check return type of function *)
           match Hashtbl.find_opt func_env f.func_name with
+          (* check whether func entry exists in our env *)
           | Some ent -> (
               match ent.ret_type with
+              (* check func dtype *)
               | DATATYPE INT, _ -> []
               | _ ->
+                  (* func has non-int dtype *)
                   Utils.format_msg pos
                     (Printf.sprintf
                        "Expression: non-integer function '%s' cannot be used \
@@ -230,6 +223,7 @@ and check_expr (expr : Parser.expr) : semantic_errors =
                        fname)
                   :: check_expr e)
           | _ ->
+              (* func entry doesn't exist in our env *)
               Utils.format_msg pos
                 (Printf.sprintf
                    "Expression: contains an undefined function '%s'!" fname)
@@ -252,44 +246,44 @@ and check_cond_expr (cond_expr : Parser.cond_expr) : semantic_errors =
       match (val1, val2) with
       | (NUMBER n1, _), (NUMBER n2, _) -> []
       | (NUMBER n, _), (IDENTIFIER var, _) | (IDENTIFIER var, _), (NUMBER n, _)
-        -> (
-          let var_name = match var with IDENT vname -> vname in
-          (* check whether var is declared *)
-          match Hashtbl.find_opt var_env var with
-          | Some ent -> (
-              (* check whether var is assigned a value *)
-              match ent.assigned_val with
-              | NONE ->
-                  [
-                    Utils.format_msg pos
-                      (Printf.sprintf
-                         "Conditional Expression: contains unassigned variable \
-                          %s!"
-                         var_name);
-                  ]
-              | _ -> (
-                  match ent.dtype with
-                  | INT -> []
-                  | _ ->
-                      [
-                        Utils.format_msg pos
-                          (Printf.sprintf
-                             "Conditional Expression: comparison requires \
-                              integer operands!. Variable '%s' has %s!"
-                             var_name
-                             (Lexer.format_dtype ent.dtype));
-                      ]))
-          | _ ->
-              [
-                Utils.format_msg pos
-                  (Printf.sprintf
-                     "Conditional Expression: contains undefined variable '%s'!"
-                     var_name);
-              ])
+        ->
+          check_var_in_expr var pos [] "Conditional Expression: "
       | (IDENTIFIER var1, pos), (IDENTIFIER var2, _) ->
           check_binary_operation var1 var2 "Conditional Expression" pos)
   | COMBINATION ((cm, ce1, ce2), _) -> check_cond_expr ce1 @ check_cond_expr ce2
   | _ -> []
+
+and check_var_in_expr (var : Parser.ident) (pos : Lexer.position)
+    (errs : semantic_errors) (prefix : string) : semantic_errors =
+  let var_name = match var with IDENT vname -> vname in
+  match Hashtbl.find_opt var_env var with
+  | Some ent -> (
+      (* check whether var is assigned a value *)
+      match ent.assigned_val with
+      | EXPR e -> (
+          (* check var type *)
+          match ent.dtype with
+          | INT -> errs
+          | _ ->
+              (* var has non-int dtype *)
+              Utils.format_msg pos
+                (Printf.sprintf
+                   "%s: requires integer operands. Variable '%s' has %s!" prefix
+                   var_name
+                   (Lexer.format_dtype ent.dtype))
+              :: errs)
+      | NONE ->
+          (* var has not been assigned a value *)
+          Utils.format_msg pos
+            (Printf.sprintf "%s: contains an unassigned variable '%s'!" prefix
+               var_name)
+          :: errs)
+  | _ ->
+      (* var entry doesn't exist in our env *)
+      Utils.format_msg pos
+        (Printf.sprintf "%s: contains an undefined variable '%s'!" prefix
+           var_name)
+      :: errs
 
 and check_binary_operation (var1 : Parser.ident) (var2 : Parser.ident)
     (msg_prefix : string) (pos : Lexer.position) : semantic_errors =
@@ -305,6 +299,7 @@ and check_binary_operation (var1 : Parser.ident) (var2 : Parser.ident)
           (* condition: both the variables must have matching types *)
           (* condition: the variable operands must not be boolean *)
           match (ent1.dtype, ent2.dtype) with
+          (* check whether both operands are ints *)
           | INT, INT -> []
           | _ ->
               [
@@ -386,10 +381,12 @@ and get_ret_expr_in_blk (func_blk : Parser.block) (include_sub_blocks : bool) :
     (* check all sub-blocks *)
     match func_blk with
     | STMTS stmts, _ ->
+        (* store all return expressions encountered *)
         List.fold_left
           (fun acc st ->
             match st with
             | Parser.RETURN re -> acc @ [ re ]
+            (* if stmt contains subblocks, explore them *)
             | Parser.IF (cond, blk) -> acc @ get_ret_expr_in_blk blk true
             | Parser.IF_ELSE ((cond, if_blk), else_blk) ->
                 (acc @ get_ret_expr_in_blk if_blk true)
@@ -404,6 +401,7 @@ and get_ret_expr_in_blk (func_blk : Parser.block) (include_sub_blocks : bool) :
     (* dont check sub-blocks *)
     match func_blk with
     | STMTS stmts, _ ->
+        (* store all return expressions encountered *)
         List.rev
           (List.fold_left
              (fun acc st ->
@@ -422,6 +420,7 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
   (* store func_decl *)
   match func_decl with
   | func, f_pos -> (
+      (* store function declared *)
       Hashtbl.replace func_env func.func_name
         {
           is_optional_type = func.is_optional_type;
@@ -440,6 +439,7 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
               let ret_stmts = get_ret_expr_in_blk func.body true in
               match func.return_type with
               | DATATYPE func_rettype, _ -> (
+                  (* non-void function should return an expression *)
                   match ret_stmts with
                   | [] ->
                       [
@@ -450,7 +450,7 @@ and check_func_decl (func_decl : Parser.func_decl) : semantic_errors =
                              fname);
                       ]
                   | _ ->
-                      (* check each return expression and gather errors *)
+                      (* check the type of each return expression and gather errors *)
                       List.flatten
                         (List.map
                            (fun re ->
@@ -566,6 +566,7 @@ and check_func_call (func_call : Parser.func_call) : semantic_errors =
           | [] -> compare_params_with_args ent.params func.args pos fname
           | errors -> errors)
       | None ->
+          (* func doesnt exist in our env *)
           [
             Utils.format_msg pos
               (Printf.sprintf "Function Call: call to undefined function '%s'!"
@@ -703,5 +704,6 @@ let rec check_prog (program : Parser.prog) : semantic_errors =
   | [] -> []
   | func :: rem_funcs ->
       List.fold_left
+        (* gather all func_decl's *)
         (fun acc fn_decl -> acc @ check_func_decl fn_decl)
         [] (func :: rem_funcs)
