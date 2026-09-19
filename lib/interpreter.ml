@@ -2,9 +2,6 @@
 exception Internal_error (* should have been handled by the checker *)
 exception Negative_power (* negative exponents *)
 
-(* --TYPE DECLARATIONS-- *)
-type eval_value = INT of int | BOOL of bool
-
 (* --INTERPRETER IMPLEMENTATION-- *)
 let rec pow (base : int) (exp : int) : int =
   (* simple power function *)
@@ -35,12 +32,30 @@ let rec eval_cond_expr (cond_expr : Ast.cond_expr) : bool =
       | LOGICAL_OR, false, false -> false
       | LOGICAL_OR, _, _ -> true)
 
-let rec eval_expr ((expr, pos) : Ast.expr) : eval_value =
+let rec eval_expr ((expr, pos) : Ast.expr) : Semantic_check.eval_value =
   (* evaluate expression *)
   match expr with
   | INT n -> INT n
-  | VAR x -> INT 0 (* TODO: eval asst & return value *)
-  | INCREMENT x -> INT 0 (* TODO: eval asst & increment & return value *)
+  | VAR x -> (
+      (* find var entry in env *)
+      match (Hashtbl.find Semantic_check.var_env x).assigned_val with
+      | EXPR e -> eval_expr e (* evaluate expr assigned to var & increment it *)
+      | VAL v -> v (* var value has already been evaluated *)
+      | NONE -> raise Internal_error)
+  | INCREMENT x -> (
+      (* find var entry in env *)
+      match (Hashtbl.find Semantic_check.var_env x).assigned_val with
+      | EXPR e -> (
+          (* evaluate expr assigned to var & increment it *)
+          match eval_expr e with
+          | INT i -> INT (i + 1)
+          | BOOL _ -> raise Internal_error)
+      | VAL v -> (
+          (* var value has already been evaluated; increment it *)
+          match v with
+          | INT i -> INT (i + 1)
+          | BOOL _ -> raise Internal_error)
+      | NONE -> raise Internal_error)
   | FUNC_CALL f -> INT 0 (* TODO: eval func_call *)
   | BINARY (op, exp1, exp2) -> (
       (* evaluate arithmetic expression *)

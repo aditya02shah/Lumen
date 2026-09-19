@@ -2,7 +2,8 @@
 type semantic_errors = string list
 
 (* Variables *)
-type asst_val = NONE | EXPR of Ast.expr
+type eval_value = INT of int | BOOL of bool
+type asst_val = NONE | EXPR of Ast.expr | VAL of eval_value
 type var_details = { mut : bool; dtype : Ast.dtype; assigned_val : asst_val }
 
 (* Expressions *)

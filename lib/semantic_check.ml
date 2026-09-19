@@ -2,7 +2,8 @@
 type semantic_errors = string list
 
 (* Variables *)
-type asst_val = NONE | EXPR of Ast.expr
+type eval_value = INT of int | BOOL of bool
+type asst_val = NONE | EXPR of Ast.expr | VAL of eval_value
 type var_details = { mut : bool; dtype : Ast.dtype; assigned_val : asst_val }
 
 (* Expressions *)
@@ -126,6 +127,7 @@ and check_expr (expr : Ast.expr) : semantic_errors =
           (* check whether unassigned var is being used in the expression *)
           match ent.assigned_val with
           | EXPR e -> []
+          | VAL v -> []
           | NONE ->
               (* var is not assigned a value *)
               [
@@ -167,6 +169,7 @@ and check_expr (expr : Ast.expr) : semantic_errors =
                              var_name
                              (Ast.format_dtype ent.dtype));
                       ])
+              | VAL v -> []
               | NONE ->
                   (* var has not been assigned a value *)
                   [
@@ -272,6 +275,7 @@ and check_var_in_expr (var : Ast.ident) (pos : Ast.position)
                    var_name
                    (Ast.format_dtype ent.dtype))
               :: errs)
+      | VAL v -> []
       | NONE ->
           (* var has not been assigned a value *)
           Utils.format_msg pos
@@ -330,7 +334,8 @@ and check_binary_operation (var1 : Ast.ident) (var2 : Ast.ident)
             Utils.format_msg pos
               (Printf.sprintf "%s contains unassigned variables '%s' and '%s'!"
                  msg_prefix var_name1 var_name2);
-          ])
+          ]
+      | _ -> [])
   (* --invalid paths-- *)
   | Some ent, None ->
       [

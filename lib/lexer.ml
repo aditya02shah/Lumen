@@ -1,6 +1,4 @@
 (* --TYPE DECLARATIONS-- *)
-type dtype = INT | BOOL (* supported datatypes *)
-
 (* Recognised tokens *)
 type token =
   (* data *)
@@ -15,7 +13,7 @@ type token =
   | IF
   | ELSE
   (* syntax *)
-  | DATATYPE of dtype
+  | DATATYPE of Ast.dtype
   | VOID
   | OPTION
   | SOME
@@ -62,9 +60,8 @@ type accum =
   | Empty
 
 (* Position-aware types *)
-type position = int (* line number *)
-type located_str = string * position (* source strings *)
-type located_token = token * position (* source tokens *)
+type located_str = string * Ast.position (* source strings *)
+type located_token = token * Ast.position (* source tokens *)
 type lexer_errors = located_token list (* source errors *)
 
 (* --HELPER FUNCTIONS-- *)
@@ -73,9 +70,6 @@ let int_of_char_list chars =
 
 let string_of_char_list chars = chars |> List.to_seq |> String.of_seq
 let string_to_char_list str = List.init (String.length str) (String.get str)
-
-let format_dtype (dt : dtype) : string =
-  match dt with INT -> "dtype('Int')" | BOOL -> "dtype('Bool')"
 
 let format_token (t : token) : string =
   match t with
@@ -125,14 +119,6 @@ let format_token (t : token) : string =
   | LOGICAL_OR -> "or"
   | NOT -> "not"
   | UNKNOWN x -> "<UNK ='" ^ x ^ "'>"
-
-let rec print_list (format_element : 'a -> string) (l : 'a list) : unit =
-  (* prints every element of the list *)
-  match l with
-  | [] -> ()
-  | x :: xs ->
-      print_endline (format_element x);
-      print_list format_element xs
 
 (* --LEXER IMPLEMENTATION-- *)
 let merge_partial_token (acc : accum) : token option =
