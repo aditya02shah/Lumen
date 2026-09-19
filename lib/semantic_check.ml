@@ -662,9 +662,9 @@ and compare_params_with_args (params : Ast.param_list) (args : Ast.arg_list)
     (func_name : string) : semantic_errors =
   (* helper function which compares parameters & arguments *)
   (* Note: each argument should already be checked *)
-  let rec loop (params : Ast.param_list) (args : Ast.arg_list)
-      (accum : semantic_errors) : semantic_errors =
-    match (params, args) with
+  let rec loop (p : Ast.param_list) (a : Ast.arg_list) (accum : semantic_errors)
+      : semantic_errors =
+    match (p, a) with
     | [], [] ->
         add_params_to_func_env params args callee_env;
         List.rev accum
