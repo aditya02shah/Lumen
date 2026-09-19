@@ -3,23 +3,27 @@ type semantic_errors = string list
 
 (* Variables *)
 type eval_value = INT of int | BOOL of bool
-type asst_val = NONE | EXPR of Ast.expr | VAL of eval_value
+type asst_val = NONE | EXPR of Ast.expr | VAL of eval_value | IS_PARAM
 type var_details = { mut : bool; dtype : Ast.dtype; assigned_val : asst_val }
 
 (* Expressions *)
 type expr_type = DTYPE of Ast.dtype | OPTION_DTYPE of Ast.dtype | VOID
 
 (* Functions *)
+type scope_vars =
+  (Ast.ident, var_details) Hashtbl.t (* keeps track of variables *)
+
 type func_details = {
   is_optional_type : bool;
   ret_type : Ast.ret_type;
   params : Ast.param_list;
   body : Ast.block;
+  env : scope_vars;
 }
 
 (* --GLOBAL VARS-- *)
-let var_env = Hashtbl.create 100 (* maps var -> var_details *)
-let func_env = Hashtbl.create 100 (* maps func -> func_details *)
+let func_decls : (Ast.ident, func_details) Hashtbl.t =
+  Hashtbl.create 100 (* keeps track of function details *)
 
 (* --HELPER FUNCTIONS-- *)
 let format_expr_type (etype : expr_type) =
@@ -34,48 +38,51 @@ let format_expr_type (etype : expr_type) =
 (* --SEMANTIC CHECKER IMPLEMENTATION-- *)
 (* Variables *)
 (* variable declaration *)
-let rec check_var_decl (var_decl : Ast.var_decl) : semantic_errors =
+let rec check_var_decl (var_decl : Ast.var_decl) (env : scope_vars) :
+    semantic_errors =
   match var_decl with
   | DECL (d, _) ->
       let decl_mut, decl_type = (d.mut, d.dtype) in
       (* store all the variables declared *)
       List.iter
         (fun var_name ->
-          Hashtbl.replace var_env var_name
+          Hashtbl.replace env var_name
             { mut = decl_mut; dtype = decl_type; assigned_val = NONE })
         d.vars;
       []
-  | DECL_ASST da -> check_decl_asst da
+  | DECL_ASST da -> check_decl_asst da env
 
-and check_decl_asst (decl_asst : Ast.decl_asst) : semantic_errors =
+and check_decl_asst (decl_asst : Ast.decl_asst) (env : scope_vars) :
+    semantic_errors =
   match decl_asst with
   | da, _ -> (
       match da.asst with
       | at, _ ->
           (* store variable *)
-          Hashtbl.replace var_env at.name
+          Hashtbl.replace env at.name
             { mut = da.mut; dtype = da.dtype; assigned_val = EXPR at.expr };
           (* check asst *)
-          check_asst da.asst true)
+          check_asst da.asst env true)
 
 (* variable assignment *)
-and check_asst (asst : Ast.asst) (is_decl_asst : bool) : semantic_errors =
+and check_asst (asst : Ast.asst) (env : scope_vars) (is_decl_asst : bool) :
+    semantic_errors =
   (* condition: var must be defined *)
   match asst with
   | at, pos -> (
       (* check whether var entry exists in our env *)
       let var_name = match at.name with IDENT vname -> vname in
-      match Hashtbl.find_opt var_env at.name with
+      match Hashtbl.find_opt env at.name with
       | Some ent ->
           if
             (* condition: var must be mutable or it is must be a declaration assignment *)
             is_decl_asst = true || ent.mut = true
           then
             (* check the expr variable is being assigned to *)
-            match check_expr at.expr with
+            match check_expr at.expr env with
             | [] -> (
                 (* condition: expression type must match type of var being assigned to *)
-                match (ent.dtype, get_expr_type at.expr) with
+                match (ent.dtype, get_expr_type at.expr env) with
                 | INT, Some (DTYPE INT) -> []
                 | BOOL, Some (DTYPE BOOL) -> []
                 | dt1, Some dt2 ->
@@ -117,18 +124,20 @@ and check_asst (asst : Ast.asst) (is_decl_asst : bool) : semantic_errors =
           ])
 
 (* Expression *)
-and check_expr (expr : Ast.expr) : semantic_errors =
+
+and check_expr (expr : Ast.expr) (env : scope_vars) : semantic_errors =
   match expr with
   | VAR var, pos -> (
       let var_name = match var with IDENT vname -> vname in
       (* condition: var must be defined and assigned a value *)
-      match Hashtbl.find_opt var_env var with
+      match Hashtbl.find_opt env var with
       (* check whether var entry exists in our env *)
       | Some ent -> (
           (* check whether unassigned var is being used in the expression *)
           match ent.assigned_val with
           | EXPR e -> []
           | VAL v -> []
+          | IS_PARAM -> []
           | NONE ->
               (* var is not assigned a value *)
               [
@@ -148,7 +157,7 @@ and check_expr (expr : Ast.expr) : semantic_errors =
   | INCREMENT var, pos -> (
       let var_name = match var with IDENT vname -> vname in
       (* condition: var must be defined and assigned a value *)
-      match Hashtbl.find_opt var_env var with
+      match Hashtbl.find_opt env var with
       (* check whether var entry exists in our env *)
       | Some ent -> (
           (* condition: var must be mutable *)
@@ -171,6 +180,7 @@ and check_expr (expr : Ast.expr) : semantic_errors =
                              (Ast.format_dtype ent.dtype));
                       ])
               | VAL v -> []
+              | IS_PARAM -> []
               | NONE ->
                   (* var has not been assigned a value *)
                   [
@@ -195,24 +205,24 @@ and check_expr (expr : Ast.expr) : semantic_errors =
                  var_name);
           ])
   (* check conditional expression *)
-  | COND ce, _ -> check_cond_expr ce
+  | COND ce, _ -> check_cond_expr ce env
   (* check function call *)
-  | FUNC_CALL fc, _ -> check_func_call fc
+  | FUNC_CALL fc, _ -> check_func_call fc env
   (* check arithmetic expression *)
   | BINARY (arithmetic_op, exp1, exp2), pos -> (
       match (exp1, exp2) with
       | (VAR var1, _), (VAR var2, _) ->
-          check_binary_operation var1 var2 "Expression: arithmetic expression"
-            pos
+          check_binary_operation var1 var2 env
+            "Expression: arithmetic expression" pos
       | (VAR var, pos), e | e, (VAR var, pos) ->
-          check_var_in_expr var pos (check_expr e)
+          check_var_in_expr var env pos (check_expr e env)
             "Expression: arithmetic operation "
       (* check func_call *)
       | (FUNC_CALL (f, _), pos), e | e, (FUNC_CALL (f, _), pos) -> (
           (* condition: only integer functions must be used in arithmetic expressions *)
           let fname = match f.func_name with IDENT f -> f in
           (* check return type of function *)
-          match Hashtbl.find_opt func_env f.func_name with
+          match Hashtbl.find_opt func_decls f.func_name with
           (* check whether func entry exists in our env *)
           | Some ent -> (
               match ent.ret_type with
@@ -225,13 +235,13 @@ and check_expr (expr : Ast.expr) : semantic_errors =
                        "Expression: non-integer function '%s' cannot be used \
                         in an arithmetic expression!"
                        fname)
-                  :: check_expr e)
+                  :: check_expr e env)
           | _ ->
               (* func entry doesn't exist in our env *)
               Utils.format_msg pos
                 (Printf.sprintf
                    "Expression: contains an undefined function '%s'!" fname)
-              :: check_expr e)
+              :: check_expr e env)
       | (COND ce, pos), _ | _, (COND ce, pos) ->
           [
             Utils.format_msg pos
@@ -239,11 +249,12 @@ and check_expr (expr : Ast.expr) : semantic_errors =
                conditional expressions!";
           ]
       (* check both operands *)
-      | _ -> check_expr exp1 @ check_expr exp2)
+      | _ -> check_expr exp1 env @ check_expr exp2 env)
   | _ -> []
 
 (* conditional expression *)
-and check_cond_expr (cond_expr : Ast.cond_expr) : semantic_errors =
+and check_cond_expr (cond_expr : Ast.cond_expr) (env : scope_vars) :
+    semantic_errors =
   match cond_expr with
   | BOOL_VAL (VAL_CMP (op, val1, val2), pos) -> (
       (* condition: logical_compare operands must be integer literals/variables *)
@@ -251,16 +262,17 @@ and check_cond_expr (cond_expr : Ast.cond_expr) : semantic_errors =
       | (NUMBER n1, _), (NUMBER n2, _) -> []
       | (NUMBER n, _), (IDENTIFIER var, _) | (IDENTIFIER var, _), (NUMBER n, _)
         ->
-          check_var_in_expr var pos [] "Conditional Expression: "
+          check_var_in_expr var env pos [] "Conditional Expression: "
       | (IDENTIFIER var1, pos), (IDENTIFIER var2, _) ->
-          check_binary_operation var1 var2 "Conditional Expression" pos)
-  | COMBINATION ((cm, ce1, ce2), _) -> check_cond_expr ce1 @ check_cond_expr ce2
+          check_binary_operation var1 var2 env "Conditional Expression" pos)
+  | COMBINATION ((cm, ce1, ce2), _) ->
+      check_cond_expr ce1 env @ check_cond_expr ce2 env
   | _ -> []
 
-and check_var_in_expr (var : Ast.ident) (pos : Ast.position)
+and check_var_in_expr (var : Ast.ident) (env : scope_vars) (pos : Ast.position)
     (errs : semantic_errors) (prefix : string) : semantic_errors =
   let var_name = match var with IDENT vname -> vname in
-  match Hashtbl.find_opt var_env var with
+  match Hashtbl.find_opt env var with
   | Some ent -> (
       (* check whether var is assigned a value *)
       match ent.assigned_val with
@@ -277,6 +289,7 @@ and check_var_in_expr (var : Ast.ident) (pos : Ast.position)
                    (Ast.format_dtype ent.dtype))
               :: errs)
       | VAL v -> []
+      | IS_PARAM -> []
       | NONE ->
           (* var has not been assigned a value *)
           Utils.format_msg pos
@@ -291,11 +304,12 @@ and check_var_in_expr (var : Ast.ident) (pos : Ast.position)
       :: errs
 
 and check_binary_operation (var1 : Ast.ident) (var2 : Ast.ident)
-    (msg_prefix : string) (pos : Ast.position) : semantic_errors =
+    (env : scope_vars) (msg_prefix : string) (pos : Ast.position) :
+    semantic_errors =
   let var_name1 = match var1 with IDENT vname -> vname in
   let var_name2 = match var2 with IDENT vname -> vname in
   (* condition: both the variables must be defined and assigned a value *)
-  match (Hashtbl.find_opt var_env var1, Hashtbl.find_opt var_env var2) with
+  match (Hashtbl.find_opt env var1, Hashtbl.find_opt env var2) with
   | Some ent1, Some ent2 -> (
       (* check whether the variables have been assigned values *)
       match (ent1.assigned_val, ent2.assigned_val) with
@@ -357,20 +371,20 @@ and check_binary_operation (var1 : Ast.ident) (var2 : Ast.ident)
              msg_prefix var_name1 var_name2);
       ]
 
-and get_expr_type (expr : Ast.expr) : expr_type option =
+and get_expr_type (expr : Ast.expr) (env : scope_vars) : expr_type option =
   (* returns the type for an expression if it can be determined, None otherwise *)
   (* NOTE: assumes expr has already been checked *)
   match expr with
   | INT _, _ -> Some (DTYPE INT)
   | VAR v, _ -> (
       (* determine var type *)
-      match Hashtbl.find_opt var_env v with
+      match Hashtbl.find_opt env v with
       | Some ent -> Some (DTYPE ent.dtype)
       | None -> None)
   | INCREMENT x, _ -> Some (DTYPE INT)
   | FUNC_CALL (f, _), _ -> (
       (* determine func return type *)
-      match Hashtbl.find_opt func_env f.func_name with
+      match Hashtbl.find_opt func_decls f.func_name with
       | Some ent -> (
           match (ent.ret_type, ent.is_optional_type) with
           | (DATATYPE d, _), false -> Some (DTYPE d)
@@ -414,10 +428,11 @@ and get_ret_expr_in_blk (func_blk : Ast.block) (include_sub_blocks : bool) :
                match st with Ast.RETURN re -> re :: acc | _ -> acc)
              [] stmts)
 
-and check_ret_expr (ret_expr : Ast.ret_expr) : semantic_errors =
+and check_ret_expr (ret_expr : Ast.ret_expr) (env : scope_vars) :
+    semantic_errors =
   (* checks expression present in return expression statement *)
   match ret_expr with
-  | EXPR e, _ | SOME_EXPR e, _ -> check_expr e
+  | EXPR e, _ | SOME_EXPR e, _ -> check_expr e env
   | NONE, _ -> []
 
 (* Functions *)
@@ -426,21 +441,35 @@ and check_func_decl (func_decl : Ast.func_decl) : semantic_errors =
   (* store func_decl *)
   match func_decl with
   | func, f_pos -> (
-      (* store function declared *)
-      Hashtbl.replace func_env func.func_name
+      let fenv : scope_vars = Hashtbl.create 30 in
+      (* store function declaration *)
+      Hashtbl.replace func_decls func.func_name
         {
           is_optional_type = func.is_optional_type;
           ret_type = func.return_type;
           params = func.params;
           body = func.body;
+          env = fenv;
         };
+
+      (* initialize parameters in function env *)
+      List.iter
+        (fun (param_type, param_name) ->
+          Hashtbl.replace fenv param_name
+            {
+              mut = true;
+              (* parameter can be modified *)
+              dtype = param_type;
+              assigned_val = IS_PARAM;
+            })
+        func.params;
 
       let fname = match func.func_name with IDENT f -> f in
       (* condition: each block must contain a maximum of 1 return expression (not including sub-blocks) *)
       match check_func_block func.body fname with
       | [] -> (
           (* check block *)
-          match check_block func.body with
+          match check_block func.body fenv with
           | [] -> (
               (* condition: void function must not contain return expression *)
               let ret_stmts = get_ret_expr_in_blk func.body true in
@@ -462,14 +491,16 @@ and check_func_decl (func_decl : Ast.func_decl) : semantic_errors =
                         (List.map
                            (fun re ->
                              (* check return expression *)
-                             match check_ret_expr re with
+                             match check_ret_expr re fenv with
                              | [] -> (
                                  (* condition: return type of function must match return expression's type *)
                                  (* condition: return expressions in optional functions must use "Some" & "None" *)
                                  match (re, func.is_optional_type) with
                                  | (EXPR e, e_pos), false
                                  | (SOME_EXPR e, e_pos), true -> (
-                                     match (func_rettype, get_expr_type e) with
+                                     match
+                                       (func_rettype, get_expr_type e fenv)
+                                     with
                                      | INT, Some (DTYPE INT) -> []
                                      | BOOL, Some (DTYPE BOOL) -> []
                                      | _, Some dt ->
@@ -496,7 +527,9 @@ and check_func_decl (func_decl : Ast.func_decl) : semantic_errors =
                                  | (NONE, e_pos), true -> []
                                  | (EXPR e, e_pos), true -> (
                                      (* if function uses optional types and return expression contains optional types, it is valid *)
-                                     match (func_rettype, get_expr_type e) with
+                                     match
+                                       (func_rettype, get_expr_type e fenv)
+                                     with
                                      | INT, Some (OPTION_DTYPE INT) -> []
                                      | BOOL, Some (OPTION_DTYPE BOOL) -> []
                                      | _, _ ->
@@ -557,20 +590,25 @@ and check_func_decl (func_decl : Ast.func_decl) : semantic_errors =
       | fd_errs -> fd_errs)
 
 (* function call *)
-and check_func_call (func_call : Ast.func_call) : semantic_errors =
+and check_func_call (func_call : Ast.func_call) (env : scope_vars) :
+    semantic_errors =
   match func_call with
   | func, pos -> (
       let fname = match func.func_name with IDENT f -> f in
       (* check if function has been defined *)
-      match Hashtbl.find_opt func_env func.func_name with
+      match Hashtbl.find_opt func_decls func.func_name with
       | Some ent -> (
           (* check each expression in the list of arguments *)
           let errs =
-            List.fold_left (fun acc exp -> acc @ check_expr exp) [] func.args
+            List.fold_left
+              (fun acc exp -> acc @ check_expr exp env)
+              [] func.args
           in
           match errs with
           (* compare parameters with arguments *)
-          | [] -> compare_params_with_args ent.params func.args pos fname
+          | [] ->
+              compare_params_with_args ent.params func.args env ent.env pos
+                fname
           | errors -> errors)
       | None ->
           (* func doesnt exist in our env *)
@@ -618,89 +656,109 @@ and check_func_block (block : Ast.block) (func_name : string) : semantic_errors
           ])
 
 and compare_params_with_args (params : Ast.param_list) (args : Ast.arg_list)
-    (pos : Ast.position) (func_name : string) : semantic_errors =
+    (caller_env : scope_vars) (callee_env : scope_vars) (pos : Ast.position)
+    (func_name : string) : semantic_errors =
   (* helper function which compares parameters & arguments *)
   (* Note: each argument should already be checked *)
-  match (params, args) with
-  | (param_type, param_name) :: rem_param, arg :: rem_args -> (
-      let pname = match param_name with IDENT p -> p in
-      (* condition: argument type must match parameter type *)
-      match (param_type, get_expr_type arg) with
-      | INT, Some (DTYPE INT) -> []
-      | BOOL, Some (DTYPE BOOL) -> []
-      | _, Some dt ->
-          [
-            Utils.format_msg pos
-              (Printf.sprintf
-                 "Function call: argument type doesn't match parameter type. \
-                  Parameter '%s' has '%s' and argument has '%s' in call to \
-                  '%s'!"
-                 pname
-                 (Ast.format_dtype param_type)
-                 (format_expr_type dt) func_name);
-          ]
-      | _, None ->
-          [
-            Utils.format_msg pos
-              (Printf.sprintf
-                 "Function call: argument type doesn't match parameter type. \
-                  Parameter '%s' has '%s' and argument has dtype('none') in \
-                  call to '%s' !"
-                 pname
-                 (Ast.format_dtype param_type)
-                 func_name);
-          ])
-  | [], [] -> []
-  (* condition: argument count must match parameter count *)
-  | _ ->
-      [
-        Utils.format_msg pos
-          (Printf.sprintf
-             "Function Call: argument count must match parameter count in call \
-              to '%s'!"
-             func_name);
-      ]
+  let rec loop (params : Ast.param_list) (args : Ast.arg_list)
+      (accum : semantic_errors) : semantic_errors =
+    match (params, args) with
+    | [], [] ->
+        add_params_to_func_env params args callee_env;
+        List.rev accum
+    | (param_type, IDENT param_name) :: rem_param, arg :: rem_args -> (
+        match (param_type, get_expr_type arg caller_env) with
+        | INT, Some (DTYPE INT) -> loop rem_param rem_args accum
+        | BOOL, Some (DTYPE BOOL) -> loop rem_param rem_args accum
+        | _, Some dt ->
+            loop rem_param rem_args
+              (Utils.format_msg pos
+                 (Printf.sprintf
+                    "Function call: argument type doesn't match parameter \
+                     type. Parameter '%s' has '%s' and argument has '%s' in \
+                     call to '%s'!"
+                    param_name
+                    (Ast.format_dtype param_type)
+                    (format_expr_type dt) func_name)
+              :: accum)
+        | _, None ->
+            loop rem_param rem_args
+              (Utils.format_msg pos
+                 (Printf.sprintf
+                    "Function call: argument type doesn't match parameter \
+                     type. Parameter '%s' has '%s' and argument has \
+                     dtype('none') in call to '%s' !"
+                    param_name
+                    (Ast.format_dtype param_type)
+                    func_name)
+              :: accum))
+    | _ ->
+        (* condition: argument count must match parameter count *)
+        [
+          Utils.format_msg pos
+            (Printf.sprintf
+               "Function Call: argument count must match parameter count in \
+                call to '%s'!"
+               func_name);
+        ]
+  in
+  loop params args []
+
+and add_params_to_func_env (params : Ast.param_list) (args : Ast.arg_list)
+    (env : scope_vars) : unit =
+  List.iter2
+    (fun (param_dtype, param_name) asst_expr ->
+      Hashtbl.replace env param_name
+        {
+          mut = true;
+          (* parameter can be modified *)
+          dtype = param_dtype;
+          assigned_val = EXPR asst_expr;
+        })
+    params args
 
 (* Statement *)
-and check_stmt (stmt : Ast.stmt) : semantic_errors =
+and check_stmt (stmt : Ast.stmt) (env : scope_vars) : semantic_errors =
   (* check stmt *)
   match stmt with
-  | VARDECL vd -> check_var_decl vd
-  | ASST at -> check_asst at false
-  | LOOP lp -> check_loop lp
-  | IF (cond, blk) -> check_cond_expr cond @ check_block blk
+  | VARDECL vd -> check_var_decl vd env
+  | ASST at -> check_asst at env false
+  | LOOP lp -> check_loop lp env
+  | IF (cond, blk) -> check_cond_expr cond env @ check_block blk env
   | IF_ELSE ((cond, if_blk), else_blk) ->
-      check_cond_expr cond @ check_block if_blk @ check_block else_blk
+      check_cond_expr cond env @ check_block if_blk env
+      @ check_block else_blk env
   | RETURN ret_expr -> (
       match ret_expr with
-      | EXPR e, _ | SOME_EXPR e, _ -> check_expr e
+      | EXPR e, _ | SOME_EXPR e, _ -> check_expr e env
       | NONE, _ -> [])
-  | EXP e -> check_expr e
+  | EXP e -> check_expr e env
   | EMPTY -> []
 
 (* Block *)
-and check_block (block : Ast.block) : semantic_errors =
+and check_block (block : Ast.block) (env : scope_vars) : semantic_errors =
   (* check each statement in block *)
   match block with
   | STMTS stmts, _ ->
-      List.fold_left (fun acc st -> acc @ check_stmt st) [] stmts
+      List.fold_left (fun acc st -> acc @ check_stmt st env) [] stmts
 
 (* Loops *)
-and check_loop (loop : Ast.loop) : semantic_errors =
+and check_loop (loop : Ast.loop) (env : scope_vars) : semantic_errors =
   match loop with
   (* check while loop *)
   | WHILE while_lp, _ ->
-      check_cond_expr while_lp.cond @ check_block while_lp.body
+      check_cond_expr while_lp.cond env @ check_block while_lp.body env
   (* check for loop *)
   | FOR for_lp, _ ->
       let init =
         match for_lp.init with
-        | ASST at, _ -> check_asst at false
-        | DECL_ASST da, _ -> check_decl_asst da
+        | ASST at, _ -> check_asst at env false
+        | DECL_ASST da, _ -> check_decl_asst da env
       in
       init
-      @ check_cond_expr for_lp.cond
-      @ check_expr for_lp.update @ check_block for_lp.body
+      @ check_cond_expr for_lp.cond env
+      @ check_expr for_lp.update env
+      @ check_block for_lp.body env
 
 (* --PUBLIC INTERFACE-- *)
 (* Program *)
