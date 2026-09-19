@@ -14,6 +14,7 @@ type func_details = {
   is_optional_type : bool;
   ret_type : Ast.ret_type;
   params : Ast.param_list;
+  body : Ast.block;
 }
 
 (* --GLOBAL VARS-- *)
@@ -431,6 +432,7 @@ and check_func_decl (func_decl : Ast.func_decl) : semantic_errors =
           is_optional_type = func.is_optional_type;
           ret_type = func.return_type;
           params = func.params;
+          body = func.body;
         };
 
       let fname = match func.func_name with IDENT f -> f in

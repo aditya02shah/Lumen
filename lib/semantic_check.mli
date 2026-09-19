@@ -14,6 +14,7 @@ type func_details = {
   is_optional_type : bool;
   ret_type : Ast.ret_type;
   params : Ast.param_list;
+  body : Ast.block;
 }
 
 (* --GLOBAL VARS-- *)

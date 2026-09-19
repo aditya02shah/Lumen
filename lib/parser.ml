@@ -829,7 +829,7 @@ and match_stmt (tokens : Lexer.located_token list) :
 
 and match_stmt_helper (tokens : Lexer.located_token list) :
     Ast.stmt option * Lexer.located_token list * parser_errors =
-  (* match a single statement (stmt = (var_decl | asst | loop | expr ";" | return expr ";" | func_call | ctrl_flow )* *)
+  (* match a single statement (stmt = (var_decl | asst | loop | expr ";" | return expr ";" | ctrl_flow )* *)
 
   (* try to match var_decl *)
   match match_var_decl tokens with
