@@ -60,7 +60,7 @@ let rec eval_expr ((expr, pos) : Ast.expr) (env : Semantic_check.scope_vars) :
           | BOOL _ -> raise Internal_error)
       | IS_PARAM -> raise Internal_error
       | NONE -> raise Internal_error)
-  | FUNC_CALL f -> eval_func_call f
+  | FUNC_CALL f -> eval_func_call f env
   | BINARY (op, exp1, exp2) -> (
       (* evaluate arithmetic expression *)
       match (eval_expr exp1 env, eval_expr exp2 env) with
@@ -130,11 +130,27 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars) : unit =
       ()
   | EMPTY -> ()
 
-and eval_func_call ((func_call, pos) : Ast.func_call) :
-    Semantic_check.eval_value option =
+and eval_func_call ((func_call, pos) : Ast.func_call)
+    (caller_env : Semantic_check.scope_vars) : Semantic_check.eval_value option
+    =
   let func_entry = Hashtbl.find Semantic_check.func_decls func_call.func_name in
 
   let stmts = match func_entry.body with STMTS st, _ -> st in
+
+  (* evaluate arguments *)
+  List.iter2
+    (fun (param_dtype, param_name) asst_expr ->
+      match eval_expr asst_expr caller_env with
+      | Some v ->
+          Hashtbl.replace func_entry.env param_name
+            {
+              mut = true;
+              (* parameter can be modified *)
+              dtype = param_dtype;
+              assigned_val = VAL v;
+            }
+      | None -> raise Internal_error)
+    func_entry.params func_call.args;
 
   (* process function body by executing each statement in it *)
   let rec process_func_body statements =
@@ -149,3 +165,13 @@ and eval_func_call ((func_call, pos) : Ast.func_call) :
     | [] -> None
   in
   process_func_body stmts
+
+let eval_program (prog : Ast.prog) : Semantic_check.eval_value option =
+  (* find main function *)
+  let main_func = Ast.IDENT "main" in
+  let main_func_call : Ast.func_call =
+    ({ func_name = main_func; args = [] }, 0)
+  in
+  match Hashtbl.find_opt Semantic_check.func_decls main_func with
+  | Some entry -> eval_func_call main_func_call entry.env
+  | None -> None

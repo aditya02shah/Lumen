@@ -608,9 +608,7 @@ and check_func_call (func_call : Ast.func_call) (env : scope_vars) :
           in
           match errs with
           (* compare parameters with arguments *)
-          | [] ->
-              compare_params_with_args ent.params func.args env ent.env pos
-                fname
+          | [] -> compare_params_with_args ent.params func.args env pos fname
           | errors -> errors)
       | None ->
           (* func doesnt exist in our env *)
@@ -658,18 +656,16 @@ and check_func_block (block : Ast.block) (func_name : string) : semantic_errors
           ])
 
 and compare_params_with_args (params : Ast.param_list) (args : Ast.arg_list)
-    (caller_env : scope_vars) (callee_env : scope_vars) (pos : Ast.position)
-    (func_name : string) : semantic_errors =
+    (env : scope_vars) (pos : Ast.position) (func_name : string) :
+    semantic_errors =
   (* helper function which compares parameters & arguments *)
   (* Note: each argument should already be checked *)
   let rec loop (p : Ast.param_list) (a : Ast.arg_list) (accum : semantic_errors)
       : semantic_errors =
     match (p, a) with
-    | [], [] ->
-        add_params_to_func_env params args callee_env;
-        List.rev accum
+    | [], [] -> List.rev accum
     | (param_type, IDENT param_name) :: rem_param, arg :: rem_args -> (
-        match (param_type, get_expr_type arg caller_env) with
+        match (param_type, get_expr_type arg env) with
         | INT, Some (DTYPE INT) -> loop rem_param rem_args accum
         | BOOL, Some (DTYPE BOOL) -> loop rem_param rem_args accum
         | _, Some dt ->
@@ -705,19 +701,6 @@ and compare_params_with_args (params : Ast.param_list) (args : Ast.arg_list)
         ]
   in
   loop params args []
-
-and add_params_to_func_env (params : Ast.param_list) (args : Ast.arg_list)
-    (env : scope_vars) : unit =
-  List.iter2
-    (fun (param_dtype, param_name) asst_expr ->
-      Hashtbl.replace env param_name
-        {
-          mut = true;
-          (* parameter can be modified *)
-          dtype = param_dtype;
-          assigned_val = EXPR asst_expr;
-        })
-    params args
 
 (* Statement *)
 and check_stmt (stmt : Ast.stmt) (env : scope_vars) : semantic_errors =
