@@ -138,7 +138,7 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars) :
             { mut = entry.mut; dtype = entry.dtype; assigned_val = VAL v };
           None
       | None -> raise Internal_error)
-  | LOOP lp -> None
+  | LOOP lp -> process_loop lp env
   | IF (ce, blk) ->
       (* evaluate condition *)
       let cond = eval_cond_expr ce env = true in
@@ -180,6 +180,27 @@ and process_block ((blk, pos) : Ast.block)
     | [] -> None
   in
   process_func_body stmts
+
+and process_loop ((loop, pos) : Ast.loop)
+    (outer_env : Semantic_check.scope_vars) : Semantic_check.eval_value option =
+  match loop with
+  | WHILE { cond; body } ->
+      let rec process_loop_body (c : Ast.cond_expr) (b : Ast.block)
+          (scope : Semantic_check.scope_vars) : Semantic_check.eval_value option
+          =
+        (* evaluate condition *)
+        if eval_cond_expr c scope = true then
+          (* if condition is true, then process while body *)
+          match process_block b scope with
+          (* found return value so return it*)
+          | Some v -> Some v
+          (* continue processing body *)
+          | None -> process_loop_body c b scope
+        (* condition is false, so return *)
+          else None
+      in
+      process_loop_body cond body outer_env
+  | FOR { init; cond; update; body } -> None
 
 and eval_func_call ((func_call, pos) : Ast.func_call)
     (caller_env : Semantic_check.scope_vars) : Semantic_check.eval_value option
