@@ -2,37 +2,58 @@
 exception Internal_error (* should have been handled by the checker *)
 exception Negative_exponent (* negative exponents *)
 
-(* --INTERPRETER IMPLEMENTATION-- *)
+(* --HELPER FUNCTIONS-- *)
 let rec pow (base : int) (exp : int) : int =
   (* simple power function *)
   if exp < 0 then raise Negative_exponent
   else if exp = 0 then 1
   else base * pow base (exp - 1)
 
-let rec eval_cond_expr (cond_expr : Ast.cond_expr) : bool =
+and get_var_value (var : Ast.ident) (env : Semantic_check.scope_vars) :
+    (* extracts value from variable *)
+    Semantic_check.eval_value =
+  match (Hashtbl.find env var).assigned_val with
+  | EXPR e -> (
+      match eval_expr e env with Some v -> v | None -> raise Internal_error)
+  | VAL v -> v
+  | _ -> raise Internal_error
+
+(* --INTERPRETER IMPLEMENTATION-- *)
+and eval_cond_expr (cond_expr : Ast.cond_expr) (env : Semantic_check.scope_vars)
+    : bool =
   (* evaluate conditional expression *)
   match cond_expr with
   | BOOL_VAL (bv, _) -> (
       match bv with
       | BOOL b -> b
-      | VAL_CMP (op, val1, val2) -> (
+      | VAL_CMP (op, (val1, _), (val2, _)) -> (
+          (* extract value from operands *)
+          let op1, op2 =
+            ( (match val1 with
+              | IDENTIFIER v -> get_var_value v env
+              | NUMBER i -> INT i),
+              match val2 with
+              | IDENTIFIER v -> get_var_value v env
+              | NUMBER i -> INT i )
+          in
           (* compare values *)
-          match op with
-          | LESS_THAN -> val1 < val2
-          | LESS_THAN_EQUALS -> val1 <= val2
-          | GREATER_THAN -> val1 > val2
-          | GREATER_THAN_EQUALS -> val1 >= val2
-          | EQUALS -> val1 = val2
-          | NOT_EQUALS -> val1 <> val2))
+          match (op, op1, op2) with
+          | LESS_THAN, INT i1, INT i2 -> i1 < i2
+          | LESS_THAN_EQUALS, INT i1, INT i2 -> i1 <= i2
+          | GREATER_THAN, INT i1, INT i2 -> i1 > i2
+          | GREATER_THAN_EQUALS, INT i1, INT i2 -> i1 >= i2
+          | EQUALS, INT i1, INT i2 -> i1 = i2
+          | NOT_EQUALS, INT i1, INT i2 -> i1 <> i2
+          | _ -> raise Internal_error))
   | COMBINATION ((op, ce1, ce2), _) -> (
       (* apply combination *)
-      match (op, eval_cond_expr ce1, eval_cond_expr ce2) with
+      match (op, eval_cond_expr ce1 env, eval_cond_expr ce2 env) with
       | LOGICAL_AND, true, true -> true
       | LOGICAL_AND, _, _ -> false
       | LOGICAL_OR, false, false -> false
       | LOGICAL_OR, _, _ -> true)
 
-let rec eval_expr ((expr, pos) : Ast.expr) (env : Semantic_check.scope_vars) :
+and eval_expr ((expr, pos) : Ast.expr) (env : Semantic_check.scope_vars) :
     Semantic_check.eval_value option =
   (* evaluate expression *)
   match expr with
@@ -73,7 +94,7 @@ let rec eval_expr ((expr, pos) : Ast.expr) (env : Semantic_check.scope_vars) :
           | MOD -> Some (INT (e1 mod e2))
           | POW -> Some (INT (pow e1 e2)))
       | _, _ -> raise Internal_error)
-  | COND ce -> Some (BOOL (eval_cond_expr ce))
+  | COND ce -> Some (BOOL (eval_cond_expr ce env))
 
 and eval_ret_expr ((ret_expr, pos) : Ast.ret_expr)
     (env : Semantic_check.scope_vars) : Semantic_check.eval_value option =
@@ -82,26 +103,6 @@ and eval_ret_expr ((ret_expr, pos) : Ast.ret_expr)
   | SOME_EXPR e -> eval_expr e env (* TODO: *)
   | NONE -> raise Internal_error
 (* TODO: *)
-
-and process_block ((blk, pos) : Ast.block)
-    (block_scope : Semantic_check.scope_vars) : Semantic_check.eval_value option
-    =
-  (* collect statements in block *)
-  let stmts = match blk with STMTS st -> st in
-
-  (* process each statement in order *)
-  let rec process_func_body statements =
-    match statements with
-    (* if return statement found, evaluate return expression & return it *)
-    | Ast.RETURN ret_expr :: st -> eval_ret_expr ret_expr block_scope
-    | s :: st -> (
-        (* process statement *)
-        match process_stmt s block_scope with
-        | Some ret_val -> Some ret_val (* found a return value *)
-        | None -> process_func_body st (* continue executing statements *))
-    | [] -> None
-  in
-  process_func_body stmts
 
 and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars) :
     Semantic_check.eval_value option =
@@ -138,7 +139,13 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars) :
           None
       | None -> raise Internal_error)
   | LOOP lp -> None
-  | IF (ce, blk) -> None
+  | IF (ce, blk) ->
+      (* evaluate condition *)
+      let cond = eval_cond_expr ce env = true in
+      (* create new scope for block *)
+      let block_scope = Hashtbl.copy env in
+      (* if condition is true process block *)
+      if cond = true then process_block blk block_scope else None
   | IF_ELSE ((ce, if_blk), else_blk) -> None
   | RETURN ret_expr -> None
   | EXP expr ->
@@ -146,6 +153,26 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars) :
       ignore (eval_expr expr env);
       None
   | EMPTY -> None
+
+and process_block ((blk, pos) : Ast.block)
+    (block_scope : Semantic_check.scope_vars) : Semantic_check.eval_value option
+    =
+  (* collect statements in block *)
+  let stmts = match blk with STMTS st -> st in
+
+  (* process each statement in order *)
+  let rec process_func_body statements =
+    match statements with
+    (* if return statement found, evaluate return expression & return it *)
+    | Ast.RETURN ret_expr :: st -> eval_ret_expr ret_expr block_scope
+    | s :: st -> (
+        (* process statement *)
+        match process_stmt s block_scope with
+        | Some ret_val -> Some ret_val (* found a return value *)
+        | None -> process_func_body st (* continue executing statements *))
+    | [] -> None
+  in
+  process_func_body stmts
 
 and eval_func_call ((func_call, pos) : Ast.func_call)
     (caller_env : Semantic_check.scope_vars) : Semantic_check.eval_value option
