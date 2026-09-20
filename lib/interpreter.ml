@@ -83,12 +83,33 @@ and eval_ret_expr ((ret_expr, pos) : Ast.ret_expr)
   | NONE -> raise Internal_error
 (* TODO: *)
 
-and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars) : unit =
+and process_block ((blk, pos) : Ast.block)
+    (block_scope : Semantic_check.scope_vars) : Semantic_check.eval_value option
+    =
+  (* collect statements in block *)
+  let stmts = match blk with STMTS st -> st in
+
+  (* process each statement in order *)
+  let rec process_func_body statements =
+    match statements with
+    (* if return statement found, evaluate return expression & return it *)
+    | Ast.RETURN ret_expr :: st -> eval_ret_expr ret_expr block_scope
+    | s :: st -> (
+        (* process statement *)
+        match process_stmt s block_scope with
+        | Some ret_val -> Some ret_val (* found a return value *)
+        | None -> process_func_body st (* continue executing statements *))
+    | [] -> None
+  in
+  process_func_body stmts
+
+and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars) :
+    Semantic_check.eval_value option =
   match stmt with
   | VARDECL vd -> (
       match vd with
       (* store all the vars declared *)
-      | DECL (d, _) -> ()
+      | DECL (d, _) -> None
       | DECL_ASST (da, _) -> (
           (* store var *)
           match da.asst with
@@ -104,7 +125,7 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars) : unit =
                       dtype = entry.dtype;
                       assigned_val = VAL v;
                     };
-                  ()
+                  None
               | None -> raise Internal_error)))
   | ASST (at, _) -> (
       let varname = at.name in
@@ -113,17 +134,18 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars) : unit =
       match eval_expr at.expr env with
       | Some v ->
           Hashtbl.replace env at.name
-            { mut = entry.mut; dtype = entry.dtype; assigned_val = VAL v }
+            { mut = entry.mut; dtype = entry.dtype; assigned_val = VAL v };
+          None
       | None -> raise Internal_error)
-  | LOOP lp -> ()
-  | IF (ce, blk) -> ()
-  | IF_ELSE ((ce, if_blk), else_blk) -> ()
-  | RETURN ret_expr -> ()
+  | LOOP lp -> None
+  | IF (ce, blk) -> None
+  | IF_ELSE ((ce, if_blk), else_blk) -> None
+  | RETURN ret_expr -> None
   | EXP expr ->
       (* execute expression to introduce intended side-effects *)
       ignore (eval_expr expr env);
-      ()
-  | EMPTY -> ()
+      None
+  | EMPTY -> None
 
 and eval_func_call ((func_call, pos) : Ast.func_call)
     (caller_env : Semantic_check.scope_vars) : Semantic_check.eval_value option
@@ -131,7 +153,6 @@ and eval_func_call ((func_call, pos) : Ast.func_call)
   let func_entry = Hashtbl.find Semantic_check.func_decls func_call.func_name in
   (* create copy of scope so evaluated values are dropped when we go out of scope *)
   let scope = Hashtbl.copy func_entry.env in
-  let stmts = match func_entry.body with STMTS st, _ -> st in
 
   (* evaluate arguments *)
   List.iter2
@@ -149,18 +170,7 @@ and eval_func_call ((func_call, pos) : Ast.func_call)
     func_entry.params func_call.args;
 
   (* process function body by executing each statement in it *)
-  let rec process_func_body statements =
-    match statements with
-    (* if return statement found, evaluate return expression *)
-    | Ast.RETURN ret_expr :: st -> eval_ret_expr ret_expr scope
-    | s :: st ->
-        (* otherwise process statement *)
-        process_stmt s scope;
-        (* move on to the other statements *)
-        process_func_body st
-    | [] -> None
-  in
-  process_func_body stmts
+  process_block func_entry.body scope
 
 let eval_program (prog : Ast.prog) : Semantic_check.eval_value option =
   (* find main function *)
