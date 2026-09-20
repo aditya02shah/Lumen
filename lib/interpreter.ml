@@ -110,16 +110,11 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars) : unit =
       let varname = at.name in
       let entry = Hashtbl.find env varname in
       (* evaluate expr assigned to var & update env *)
-      match entry.assigned_val with
-      | EXPR e -> (
-          match eval_expr e env with
-          | Some v ->
-              Hashtbl.replace env at.name
-                { mut = entry.mut; dtype = entry.dtype; assigned_val = VAL v };
-              ()
-          | None -> raise Internal_error)
-      | VAL _ -> () (* expr has already been evaluated *)
-      | _ -> raise Internal_error)
+      match eval_expr at.expr env with
+      | Some v ->
+          Hashtbl.replace env at.name
+            { mut = entry.mut; dtype = entry.dtype; assigned_val = VAL v }
+      | None -> raise Internal_error)
   | LOOP lp -> ()
   | IF (ce, blk) -> ()
   | IF_ELSE ((ce, if_blk), else_blk) -> ()
