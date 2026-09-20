@@ -146,7 +146,14 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars) :
       let block_scope = Hashtbl.copy env in
       (* if condition is true process block *)
       if cond = true then process_block blk block_scope else None
-  | IF_ELSE ((ce, if_blk), else_blk) -> None
+  | IF_ELSE ((ce, if_blk), else_blk) ->
+      (* evaluate condition *)
+      let cond = eval_cond_expr ce env = true in
+      (* create new scope for block *)
+      let if_scope, else_scope = (Hashtbl.copy env, Hashtbl.copy env) in
+      (* if condition is true process if_blk, otherwise process else_blk *)
+      if cond = true then process_block if_blk if_scope
+      else process_block else_blk else_scope
   | RETURN ret_expr -> None
   | EXP expr ->
       (* execute expression to introduce intended side-effects *)
