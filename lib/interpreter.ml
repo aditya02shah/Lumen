@@ -134,7 +134,8 @@ and eval_func_call ((func_call, pos) : Ast.func_call)
     (caller_env : Semantic_check.scope_vars) : Semantic_check.eval_value option
     =
   let func_entry = Hashtbl.find Semantic_check.func_decls func_call.func_name in
-
+  (* create copy of scope so evaluated values are dropped when we go out of scope *)
+  let scope = Hashtbl.copy func_entry.env in
   let stmts = match func_entry.body with STMTS st, _ -> st in
 
   (* evaluate arguments *)
@@ -142,7 +143,7 @@ and eval_func_call ((func_call, pos) : Ast.func_call)
     (fun (param_dtype, param_name) asst_expr ->
       match eval_expr asst_expr caller_env with
       | Some v ->
-          Hashtbl.replace func_entry.env param_name
+          Hashtbl.replace scope param_name
             {
               mut = true;
               (* parameter can be modified *)
@@ -156,10 +157,10 @@ and eval_func_call ((func_call, pos) : Ast.func_call)
   let rec process_func_body statements =
     match statements with
     (* if return statement found, evaluate return expression *)
-    | Ast.RETURN ret_expr :: st -> eval_ret_expr ret_expr func_entry.env
+    | Ast.RETURN ret_expr :: st -> eval_ret_expr ret_expr scope
     | s :: st ->
         (* otherwise process statement *)
-        process_stmt s func_entry.env;
+        process_stmt s scope;
         (* move on to the other statements *)
         process_func_body st
     | [] -> None
