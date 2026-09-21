@@ -136,7 +136,7 @@ and match_var_decl_asst (tokens : Lexer.located_token list) :
   match tokens with
   | (DATATYPE dtype, pos) :: rem -> (
       (* --valid path-- *)
-      match match_asst rem with
+      match match_asst rem true with
       | Some at, r, _ -> (Some ({ mut = false; dtype; asst = at }, pos), r, [])
       | None, _, asst_errs ->
           (* --invalid path-- *)
@@ -147,7 +147,7 @@ and match_var_decl_asst (tokens : Lexer.located_token list) :
   (* mutable decl *)
   | (MUT, pos) :: (DATATYPE dtype, _) :: rem -> (
       (* --valid path-- *)
-      match match_asst rem with
+      match match_asst rem true with
       | Some at, r, _ -> (Some ({ mut = true; dtype; asst = at }, pos), r, [])
       | None, _, asst_errs ->
           (* --invalid path-- *)
@@ -190,21 +190,38 @@ and match_var_decl_helper (tokens : Lexer.located_token list)
   loop tokens [ IDENT vname ]
 
 (* variable assignment *)
-and match_asst (tokens : Lexer.located_token list) :
+and match_asst (tokens : Lexer.located_token list) (require_semicolon : bool) :
     Ast.asst option * Lexer.located_token list * parser_errors =
   (* asst -> var_name "=" expr ";" *)
   match tokens with
   | (IDENTIFIER name, pos) :: (ASSIGNMENT, _) :: rem -> (
-      match match_expr rem with
-      | Some e, (SEMICOLON, _) :: r, _ ->
-          (* --valid path-- *)
-          (Some ({ name = IDENT name; expr = e }, pos), r, [])
-          (* --invalid path-- *)
-      | _, _, exp_errs ->
-          ( None,
-            tokens,
-            [ Utils.format_msg pos "Assignment: invalid expression!" ]
-            @ exp_errs ))
+      if require_semicolon then
+        match match_expr rem with
+        | Some e, (SEMICOLON, _) :: r, _ ->
+            (* --valid path-- *)
+            (Some ({ name = IDENT name; expr = e }, pos), r, [])
+            (* --invalid paths-- *)
+        | Some e, (tok, _) :: r, _ ->
+            ( None,
+              tokens,
+              [
+                Utils.format_msg pos
+                  (Printf.sprintf "Assignment: expected ';'. Found %s!"
+                     (Lexer.format_token tok));
+              ] )
+        | _, _, exp_errs ->
+            ( None,
+              tokens,
+              [ Utils.format_msg pos "Assignment: invalid expression!" ]
+              @ exp_errs )
+      else
+        match match_expr rem with
+        | Some e, r, _ -> (Some ({ name = IDENT name; expr = e }, pos), r, [])
+        | _, _, exp_errs ->
+            ( None,
+              tokens,
+              [ Utils.format_msg pos "Assignment: invalid expression!" ]
+              @ exp_errs ))
   (* --invalid paths-- *)
   | (IDENTIFIER name, pos) :: (tok, _) :: _ ->
       ( None,
@@ -836,7 +853,7 @@ and match_stmt_helper (tokens : Lexer.located_token list) :
   | Some vd, rem_tokens, vd_errs -> (Some (VARDECL vd), rem_tokens, vd_errs)
   | _, _, vd_errs -> (
       (* try to match asst *)
-      match match_asst tokens with
+      match match_asst tokens true with
       | Some at, rem, at_errs -> (Some (ASST at), rem, at_errs)
       | _, _, at_errs -> (
           (* try to match loop *)
@@ -937,7 +954,7 @@ and match_block (tokens : Lexer.located_token list) :
 and match_loop (tokens : Lexer.located_token list) :
     Ast.loop option * Lexer.located_token list * parser_errors =
   (* loop -> while cond_expr block 
-          -> for "(" var_init  cond_expr ";" update_expr ")" block
+          -> for "(" decl_asst  cond_expr ";" (update_asst | INCREMENT ";") ")" block
 
     var_init = asst | decl_asst 
   *)
@@ -968,21 +985,104 @@ and match_loop (tokens : Lexer.located_token list) :
             @ ce_errs ))
   (* try to match for *)
   | (FOR, pos) :: (L_PAREN, _) :: rem_tokens -> (
-      (* try to match var_init *)
-      match match_asst rem_tokens with
-      | Some at, rem, asst_errs -> for_loop_helper rem (ASST at, pos)
-      | _, _, asst_errs -> (
-          match match_var_decl_asst rem_tokens with
-          | Some dcl, r, decl_errs -> for_loop_helper r (DECL_ASST dcl, pos)
-          | _, _, decl_errs ->
+      (* try to match decl_asst *)
+      match match_var_decl_asst rem_tokens with
+      | Some dcl, rtoks, init_errs -> (
+          (* try to match cond_expr *)
+          match match_cond_expr rtoks with
+          | Some cond, (SEMICOLON, pos) :: rtok, ce_errs -> (
+              (* try to match increment ";" *)
+              match rtok with
+              | (IDENTIFIER i, pos) :: (INCREMENT, _) :: (R_PAREN, _) :: rem
+                -> (
+                  (* --valid paths-- *)
+                  match match_block rem with
+                  (* try to match block *)
+                  | Some body, rs, blk_errs ->
+                      let upd = Ast.INC (IDENT i) in
+                      ( Some
+                          ( FOR { init = dcl; cond; update = (upd, pos); body },
+                            pos ),
+                        rs,
+                        blk_errs @ init_errs @ ce_errs )
+                  (* --invalid paths-- *)
+                  | _, _, blk_errs ->
+                      ( None,
+                        tokens,
+                        [
+                          Utils.format_msg pos
+                            "For loop: contains invalid block!";
+                        ]
+                        @ blk_errs @ init_errs @ ce_errs ))
+              | (IDENTIFIER i, pos) :: (INCREMENT, _) :: (tok, _) :: rem ->
+                  ( None,
+                    tokens,
+                    [
+                      Utils.format_msg pos
+                        (Printf.sprintf
+                           "For loop: expected ')' after increment. Found %s!"
+                           (Lexer.format_token tok));
+                    ]
+                    @ init_errs @ ce_errs )
+              | _ -> (
+                  (* couldnt find increment; try to match decl_asst *)
+                  match match_asst rtok false with
+                  | Some at, (R_PAREN, _) :: rem, upd_errs -> (
+                      (* try to match block *)
+                      match match_block rem with
+                      | Some body, rs, blk_errs ->
+                          let upd = Ast.UPDATE_ASST at in
+                          ( Some
+                              ( FOR
+                                  {
+                                    init = dcl;
+                                    cond;
+                                    update = (upd, pos);
+                                    body;
+                                  },
+                                pos ),
+                            rs,
+                            blk_errs @ init_errs @ ce_errs )
+                      (* --invalid paths-- *)
+                      | _, _, blk_errs ->
+                          ( None,
+                            tokens,
+                            [
+                              Utils.format_msg pos
+                                "For loop: contains invalid block!";
+                            ]
+                            @ blk_errs @ init_errs @ ce_errs ))
+                  | Some dcl, (tok, pos) :: rem, errs ->
+                      ( None,
+                        tokens,
+                        [
+                          Utils.format_msg pos
+                            (Printf.sprintf "For loop: expected ';'. Found %s!"
+                               (Lexer.format_token tok));
+                        ]
+                        @ errs )
+                  | _, _, errs ->
+                      ( None,
+                        tokens,
+                        "For loop: contains invalid update!" :: errs )))
+          (* --invalid paths-- *)
+          | Some cond, (tok, pos) :: rtok, errs ->
               ( None,
                 tokens,
                 [
                   Utils.format_msg pos
-                    "For loop: contains invalid initialization!";
+                    (Printf.sprintf "For loop: expected ';'. Found %s!"
+                       (Lexer.format_token tok));
                 ]
-                @ decl_errs @ asst_errs )))
-  (* --invalid paths-- *)
+                @ errs )
+          | _, _, errs -> (None, tokens, init_errs @ errs))
+      | _, _, decl_errs ->
+          ( None,
+            tokens,
+            [
+              Utils.format_msg pos "For loop: contains invalid initialization!";
+            ]
+            @ decl_errs ))
   | (FOR, pos) :: (tok, _) :: rem_tokens ->
       ( None,
         tokens,
@@ -992,57 +1092,6 @@ and match_loop (tokens : Lexer.located_token list) :
                (Lexer.format_token tok));
         ] )
   | _ -> (None, tokens, [])
-
-and for_loop_helper (tokens : Lexer.located_token list) (init : Ast.var_init) :
-    Ast.loop option * Lexer.located_token list * parser_errors =
-  (* helps match cond_expr ";" update_expr ")" block *)
-
-  (* try to match cond_expr ";" *)
-
-  (* --valid paths-- *)
-  match match_cond_expr tokens with
-  | Some cond, (SEMICOLON, pos) :: rem, ce_errs -> (
-      (* try to match update_expr ")" *)
-      match match_expr rem with
-      | Some update, (R_PAREN, _) :: r, upd_errs -> (
-          (* try to match block *)
-          match match_block r with
-          | Some body, rtok, blk_errs ->
-              ( Some (FOR { init; cond; update; body }, pos),
-                rtok,
-                blk_errs @ blk_errs @ upd_errs @ ce_errs )
-          (* --invalid paths-- *)
-          | _, _, blk_errs ->
-              ( None,
-                tokens,
-                [ Utils.format_msg pos "For loop: contains invalid block!" ]
-                @ blk_errs ))
-      | Some update, (tok, _) :: r, upd_errs ->
-          ( None,
-            tokens,
-            [
-              Utils.format_msg pos
-                (Printf.sprintf "For loop: expected ')'. Found %s!"
-                   (Lexer.format_token tok));
-            ]
-            @ upd_errs )
-      | None, _, upd_errs ->
-          ( None,
-            tokens,
-            [ Utils.format_msg pos "For loop: contains  update expression!" ]
-            @ upd_errs )
-      | _ -> (None, tokens, []))
-  (* --invalid paths-- *)
-  | Some cond, (tok, pos) :: rem, errs ->
-      ( None,
-        tokens,
-        [
-          Utils.format_msg pos
-            (Printf.sprintf "For loop: expected ';'. Found %s!"
-               (Lexer.format_token tok));
-        ]
-        @ errs )
-  | _, _, errs -> (None, tokens, errs)
 
 (* --PUBLIC INTERFACE-- *)
 (* Program *)

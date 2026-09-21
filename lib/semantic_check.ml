@@ -54,17 +54,19 @@ let rec check_var_decl (var_decl : Ast.var_decl) (env : scope_vars) :
       []
   | DECL_ASST da -> check_decl_asst da env
 
-and check_decl_asst (decl_asst : Ast.decl_asst) (env : scope_vars) :
+and check_decl_asst ((decl_asst, pos) : Ast.decl_asst) (env : scope_vars) :
     semantic_errors =
-  match decl_asst with
-  | da, _ -> (
-      match da.asst with
-      | at, _ ->
-          (* store variable *)
-          Hashtbl.replace env at.name
-            { mut = da.mut; dtype = da.dtype; assigned_val = EXPR at.expr };
-          (* check asst *)
-          check_asst da.asst env true)
+  match decl_asst.asst with
+  | at, _ ->
+      (* store variable *)
+      Hashtbl.replace env at.name
+        {
+          mut = decl_asst.mut;
+          dtype = decl_asst.dtype;
+          assigned_val = EXPR at.expr;
+        };
+      (* check asst *)
+      check_asst decl_asst.asst env true
 
 (* variable assignment *)
 and check_asst (asst : Ast.asst) (env : scope_vars) (is_decl_asst : bool) :
@@ -126,7 +128,6 @@ and check_asst (asst : Ast.asst) (env : scope_vars) (is_decl_asst : bool) :
           ])
 
 (* Expression *)
-
 and check_expr (expr : Ast.expr) (env : scope_vars) : semantic_errors =
   match expr with
   | VAR var, pos -> (
@@ -735,15 +736,19 @@ and check_loop (loop : Ast.loop) (env : scope_vars) : semantic_errors =
       check_cond_expr while_lp.cond env @ check_block while_lp.body env
   (* check for loop *)
   | FOR for_lp, _ ->
-      let init =
-        match for_lp.init with
-        | ASST at, _ -> check_asst at env false
-        | DECL_ASST da, _ -> check_decl_asst da env
+      (*
+       enforce evaluation order 
+      @ doesnt guarantee left-to-right evaluation and I spent way too much time debugging this :)
+      *)
+      let init_errs = check_decl_asst for_lp.init env in
+      let cond_errs = check_cond_expr for_lp.cond env in
+      let update_errs =
+        match for_lp.update with
+        | INC i, p -> check_expr (Ast.INCREMENT i, p) env
+        | UPDATE_ASST at, _ -> check_asst at env false
       in
-      init
-      @ check_cond_expr for_lp.cond env
-      @ check_expr for_lp.update env
-      @ check_block for_lp.body env
+      let body_errs = check_block for_lp.body env in
+      init_errs @ cond_errs @ update_errs @ body_errs
 
 (* --PUBLIC INTERFACE-- *)
 (* Program *)

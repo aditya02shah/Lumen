@@ -25,8 +25,8 @@ and var_decl =
   | DECL_ASST of decl_asst (* declaration and assignment in same statement *)
 
 (* variable initialisation *)
-and var_init = var_init_node * position
-and var_init_node = ASST of asst | DECL_ASST of decl_asst
+and var_update = var_update_node * position
+and var_update_node = INC of ident | UPDATE_ASST of asst
 
 (* Expression *)
 and expr = expr_node * position
@@ -115,9 +115,9 @@ and while_loop = { cond : cond_expr; body : block }
 
 (* for loop *)
 and for_loop = {
-  init : var_init;
+  init : decl_asst;
   cond : cond_expr;
-  update : expr;
+  update : var_update;
   body : block;
 }
 

@@ -21,6 +21,7 @@ val match_var_decl :
 
 val match_asst :
   Lexer.located_token list ->
+  bool ->
   Ast.asst option * Lexer.located_token list * parser_errors
 
 val format_asst : Ast.asst option -> string
