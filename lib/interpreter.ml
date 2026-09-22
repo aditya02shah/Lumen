@@ -67,17 +67,36 @@ and eval_expr ((expr, pos) : Ast.expr) (env : Semantic_check.scope_vars) :
       | NONE -> raise Internal_error)
   | INCREMENT x -> (
       (* find var entry in env *)
-      match (Hashtbl.find env x).assigned_val with
+      let entry = Hashtbl.find env x in
+      match entry.assigned_val with
       | EXPR e -> (
           (* evaluate expr assigned to var & increment it *)
           match eval_expr e env with
-          | Some (INT i) -> Some (INT (i + 1))
+          | Some (INT i) ->
+              (* update value *)
+              Hashtbl.replace env x
+                {
+                  mut = entry.mut;
+                  dtype = entry.dtype;
+                  assigned_val = VAL (INT (i + 1));
+                };
+              (* return it *)
+              Some (INT (i + 1))
           | Some (BOOL _) -> raise Internal_error
           | None -> raise Internal_error)
       | VAL v -> (
           (* var value has already been evaluated; increment it *)
           match v with
-          | INT i -> Some (INT (i + 1))
+          | INT i ->
+              (* update value *)
+              Hashtbl.replace env x
+                {
+                  mut = entry.mut;
+                  dtype = entry.dtype;
+                  assigned_val = VAL (INT (i + 1));
+                };
+              (* return it *)
+              Some (INT (i + 1))
           | BOOL _ -> raise Internal_error)
       | IS_PARAM -> raise Internal_error
       | NONE -> raise Internal_error)
@@ -141,18 +160,18 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars) :
   | LOOP lp -> process_loop lp env
   | IF (ce, blk) ->
       (* evaluate condition *)
-      let cond = eval_cond_expr ce env = true in
+      let cond = eval_cond_expr ce env in
       (* create new scope for block *)
       let block_scope = Hashtbl.copy env in
       (* if condition is true process block *)
-      if cond = true then process_block blk block_scope else None
+      if cond then process_block blk block_scope else None
   | IF_ELSE ((ce, if_blk), else_blk) ->
       (* evaluate condition *)
-      let cond = eval_cond_expr ce env = true in
+      let cond = eval_cond_expr ce env in
       (* create new scope for block *)
       let if_scope, else_scope = (Hashtbl.copy env, Hashtbl.copy env) in
       (* if condition is true process if_blk, otherwise process else_blk *)
-      if cond = true then process_block if_blk if_scope
+      if cond then process_block if_blk if_scope
       else process_block else_blk else_scope
   | RETURN ret_expr -> None
   | EXP expr ->
@@ -185,22 +204,45 @@ and process_loop ((loop, pos) : Ast.loop)
     (outer_env : Semantic_check.scope_vars) : Semantic_check.eval_value option =
   match loop with
   | WHILE { cond; body } ->
-      let rec process_loop_body (c : Ast.cond_expr) (b : Ast.block)
+      let rec process_while (c : Ast.cond_expr) (b : Ast.block)
           (scope : Semantic_check.scope_vars) : Semantic_check.eval_value option
           =
         (* evaluate condition *)
-        if eval_cond_expr c scope = true then
+        if eval_cond_expr c scope then
           (* if condition is true, then process while body *)
           match process_block b scope with
-          (* found return value so return it*)
+          (* found return value so return it *)
           | Some v -> Some v
-          (* continue processing body *)
-          | None -> process_loop_body c b scope
+          (* repeat *)
+          | None -> process_while c b scope
         (* condition is false, so return *)
           else None
       in
-      process_loop_body cond body outer_env
-  | FOR { init; cond; update; body } -> None
+      process_while cond body outer_env
+  | FOR { init; cond; update; body } ->
+      (* process initialization *)
+      ignore (process_stmt (Ast.VARDECL (Ast.DECL_ASST init)) outer_env);
+
+      let rec process_for (c : Ast.cond_expr) (u : Ast.var_update)
+          (b : Ast.block) (scope : Semantic_check.scope_vars) :
+          Semantic_check.eval_value option =
+        (* check cond *)
+        if eval_cond_expr c scope then (
+          (* process body *)
+          (* if cond is true, process body & update *)
+          match process_block b scope with
+          | Some v -> Some v (* found return value so return it *)
+          | None ->
+              (* apply update *)
+              ignore
+                (match u with
+                | INC i, p -> eval_expr (Ast.INCREMENT i, p) scope
+                | UPDATE_ASST at, _ -> process_stmt (Ast.ASST at) scope);
+              (* repeat *)
+              process_for c u b scope)
+        else None
+      in
+      process_for cond update body outer_env
 
 and eval_func_call ((func_call, pos) : Ast.func_call)
     (caller_env : Semantic_check.scope_vars) : Semantic_check.eval_value option
