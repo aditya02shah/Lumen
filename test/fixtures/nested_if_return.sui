@@ -1,0 +1,20 @@
+int add(int x, int y){
+    int sum = x + y;
+    mut int res;
+
+    if (sum > 10){
+        res = 510;
+        return res;
+        if (sum > 15){
+            res = 530;
+        }
+    }
+    else {
+        res = 32;
+    }
+   return res;
+}
+
+int main(){
+    return add(2, 17);
+}

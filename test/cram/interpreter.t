@@ -10,14 +10,26 @@
   $ ../../bin/main.exe ../fixtures/if2.sui
   5
 
+  $ ../../bin/main.exe ../fixtures/nested_if1.sui
+  510
+
+  $ ../../bin/main.exe ../fixtures/nested_if2.sui
+  530
+
+  $ ../../bin/main.exe ../fixtures/nested_if3.sui
+  32
+
   $ ../../bin/main.exe ../fixtures/if_for.sui
   99
 
   $ ../../bin/main.exe ../fixtures/if_else.sui
   4
+  $ ../../bin/main.exe ../fixtures/if_else_mutation.sui
+  32
 
   $ ../../bin/main.exe ../fixtures/while.sui
   55
 
   $ ../../bin/main.exe ../fixtures/for.sui
   55
+

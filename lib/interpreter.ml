@@ -2,6 +2,9 @@
 exception Internal_error (* should have been handled by the checker *)
 exception Negative_exponent (* negative exponents *)
 
+(* --TYPE DECLARATIONS-- *)
+type parent_scope = SCOPE of Semantic_check.scope_vars | NONE
+
 (* --HELPER FUNCTIONS-- *)
 let rec pow (base : int) (exp : int) : int =
   (* simple power function *)
@@ -168,15 +171,15 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars)
       (* create new scope for block *)
       let block_scope = Hashtbl.copy env in
       (* if condition is true process block *)
-      if cond then process_block blk block_scope false else None
+      if cond then process_block blk block_scope false (SCOPE env) else None
   | IF_ELSE ((ce, if_blk), else_blk) ->
       (* evaluate condition *)
       let cond = eval_cond_expr ce env in
       (* create new scope for block *)
       let if_scope, else_scope = (Hashtbl.copy env, Hashtbl.copy env) in
       (* if condition is true process if_blk, otherwise process else_blk *)
-      if cond then process_block if_blk if_scope false
-      else process_block else_blk else_scope false
+      if cond then process_block if_blk if_scope false (SCOPE env)
+      else process_block else_blk else_scope false (SCOPE env)
   | RETURN ret_expr -> None
   | EXP expr ->
       (* execute expression to introduce intended side-effects *)
@@ -185,8 +188,8 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars)
   | EMPTY -> None
 
 and process_block ((blk, pos) : Ast.block)
-    (block_scope : Semantic_check.scope_vars) (already_processed : bool) :
-    Semantic_check.eval_value option =
+    (block_scope : Semantic_check.scope_vars) (already_processed : bool)
+    (parent_scope : parent_scope) : Semantic_check.eval_value option =
   (* collect statements in block *)
   let stmts = match blk with STMTS st -> st in
 
@@ -200,9 +203,35 @@ and process_block ((blk, pos) : Ast.block)
         match process_stmt s block_scope already_processed with
         | Some ret_val -> Some ret_val (* found a return value *)
         | None -> process_func_body st (* continue executing statements *))
-    | [] -> None
+    | [] -> (
+        (* block has been processed; propagate mutated variables to outer scope where applicable *)
+        match parent_scope with
+        | SCOPE s ->
+            ignore (update_parent_scope block_scope s);
+            None
+        | NONE -> None)
   in
   process_func_body stmts
+
+and update_parent_scope (child_scope : Semantic_check.scope_vars)
+    (parent_scope : Semantic_check.scope_vars) : unit =
+  (* propagate mutated variables in child scope to parent scope *)
+
+  (* iterate through all variable declarations in child scope *)
+  Hashtbl.iter
+    (fun var_name (child_entry : Semantic_check.var_details) ->
+      (* check if variable also exists in parent scope *)
+      let parent_entry = Hashtbl.find_opt parent_scope var_name in
+      match parent_entry with
+      | Some pe -> (
+          match (pe.assigned_val, child_entry.assigned_val) with
+          | _, VAL v ->
+              (* update value of variable in parent scope *)
+              Hashtbl.replace parent_scope var_name
+                { pe with assigned_val = VAL v }
+          | _ -> ())
+      | _ -> ())
+    child_scope
 
 and process_loop ((loop, pos) : Ast.loop)
     (outer_env : Semantic_check.scope_vars) (already_processed : bool) :
@@ -215,7 +244,7 @@ and process_loop ((loop, pos) : Ast.loop)
         (* evaluate condition *)
         if eval_cond_expr c scope then
           (* if condition is true, then process while body *)
-          match process_block b scope already_processed with
+          match process_block b scope already_processed NONE with
           (* found return value so return it *)
           | Some v -> Some v
           (* repeat *)
@@ -237,7 +266,7 @@ and process_loop ((loop, pos) : Ast.loop)
         if eval_cond_expr c scope then (
           (* process body *)
           (* if cond is true, process body & update *)
-          match process_block b scope already_processed with
+          match process_block b scope already_processed NONE with
           | Some v -> Some v (* found return value so return it *)
           | None ->
               (* apply update *)
@@ -275,7 +304,7 @@ and eval_func_call ((func_call, pos) : Ast.func_call)
     func_entry.params func_call.args;
 
   (* process function body by executing each statement in it *)
-  process_block func_entry.body scope true
+  process_block func_entry.body scope true NONE
 
 let eval_program (prog : Ast.prog) : Semantic_check.eval_value option =
   (* find main function *)
