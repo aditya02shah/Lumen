@@ -14,6 +14,7 @@ type scope_vars =
   (Ast.ident, var_details) Hashtbl.t (* keeps track of variables *)
 
 type func_details = {
+  fname : string;
   is_optional_type : bool;
   ret_type : Ast.ret_type;
   params : Ast.param_list;
@@ -69,63 +70,61 @@ and check_decl_asst ((decl_asst, pos) : Ast.decl_asst) (env : scope_vars) :
       check_asst decl_asst.asst env true
 
 (* variable assignment *)
-and check_asst (asst : Ast.asst) (env : scope_vars) (is_decl_asst : bool) :
+and check_asst ((at, pos) : Ast.asst) (env : scope_vars) (is_decl_asst : bool) :
     semantic_errors =
   (* condition: var must be defined *)
-  match asst with
-  | at, pos -> (
-      (* check whether var entry exists in our env *)
-      let var_name = match at.name with IDENT vname -> vname in
-      match Hashtbl.find_opt env at.name with
-      | Some ent ->
-          if
-            (* condition: var must be mutable or it is must be a declaration assignment *)
-            is_decl_asst = true || ent.mut = true
-          then
-            (* check the expr variable is being assigned to *)
-            match check_expr at.expr env with
-            | [] -> (
-                (* condition: expression type must match type of var being assigned to *)
-                match (ent.dtype, get_expr_type at.expr env) with
-                | INT, Some (DTYPE INT) -> []
-                | BOOL, Some (DTYPE BOOL) -> []
-                | dt1, Some dt2 ->
-                    (* type mismatch *)
-                    [
-                      Utils.format_msg pos
-                        (Printf.sprintf
-                           "Assignment: variable %s and expression %s do not \
-                            match!"
-                           (Ast.format_dtype dt1) (format_expr_type dt2));
-                    ]
-                | dt, None ->
-                    (* type mismatch *)
-                    [
-                      Utils.format_msg pos
-                        (Printf.sprintf
-                           "Assignment: variable %s and expression \
-                            dtype('none') do not match!"
-                           (Ast.format_dtype dt));
-                    ])
-            | expr_errs ->
-                (* var is being assigned an invalid expression *)
-                Utils.format_msg pos "Assignment: contains invalid expression!"
-                :: expr_errs
-          else
-            (* assigning to immutable var *)
-            [
-              Utils.format_msg pos
-                (Printf.sprintf
-                   "Assignment: cannot assign value to immutable variable '%s'!"
-                   var_name);
-            ]
-      | _ ->
-          (* var entry doesn't exist in our env *)
-          [
-            Utils.format_msg pos
-              (Printf.sprintf "Assignment: contains an undefined variable '%s'!"
-                 var_name);
-          ])
+
+  (* check whether var entry exists in our env *)
+  let var_name = match at.name with IDENT vname -> vname in
+  match Hashtbl.find_opt env at.name with
+  | Some ent ->
+      if
+        (* condition: var must be mutable or it is must be a declaration assignment *)
+        is_decl_asst || ent.mut
+      then
+        (* check the expr variable is being assigned to *)
+        match check_expr at.expr env with
+        | [] -> (
+            (* condition: expression type must match type of var being assigned to *)
+            match (ent.dtype, get_expr_type at.expr env) with
+            | INT, Some (DTYPE INT) -> []
+            | BOOL, Some (DTYPE BOOL) -> []
+            | dt1, Some dt2 ->
+                (* type mismatch *)
+                [
+                  Utils.format_msg pos
+                    (Printf.sprintf
+                       "Assignment: variable %s and expression %s do not match!"
+                       (Ast.format_dtype dt1) (format_expr_type dt2));
+                ]
+            | dt, None ->
+                (* type mismatch *)
+                [
+                  Utils.format_msg pos
+                    (Printf.sprintf
+                       "Assignment: variable %s and expression dtype('none') \
+                        do not match!"
+                       (Ast.format_dtype dt));
+                ])
+        | expr_errs ->
+            (* var is being assigned an invalid expression *)
+            Utils.format_msg pos "Assignment: contains invalid expression!"
+            :: expr_errs
+      else
+        (* assigning to immutable var *)
+        [
+          Utils.format_msg pos
+            (Printf.sprintf
+               "Assignment: cannot assign value to immutable variable '%s'!"
+               var_name);
+        ]
+  | _ ->
+      (* var entry doesn't exist in our env *)
+      [
+        Utils.format_msg pos
+          (Printf.sprintf "Assignment: contains an undefined variable '%s'!"
+             var_name);
+      ]
 
 (* Expression *)
 and check_expr (expr : Ast.expr) (env : scope_vars) : semantic_errors =
@@ -431,193 +430,162 @@ and get_ret_expr_in_blk (func_blk : Ast.block) (include_sub_blocks : bool) :
                match st with Ast.RETURN re -> re :: acc | _ -> acc)
              [] stmts)
 
-and check_ret_expr (ret_expr : Ast.ret_expr) (env : scope_vars) :
+and check_ret_expr (re : Ast.ret_expr) (fdetails : func_details) :
     semantic_errors =
-  (* checks expression present in return expression statement *)
-  match ret_expr with
-  | EXPR e, _ | SOME_EXPR e, _ -> check_expr e env
-  | NONE, _ -> []
+  (* checks each return expression *)
+  match fdetails.ret_type with
+  | DATATYPE func_rettype, _ -> (
+      (* condition: return type of function must match return expression's type *)
+      (* condition: return expressions in optional functions must use "Some" & "None" *)
+      match (re, fdetails.is_optional_type) with
+      | (EXPR e, e_pos), false | (SOME_EXPR e, e_pos), true -> (
+          match (func_rettype, get_expr_type e fdetails.env) with
+          | INT, Some (DTYPE INT) -> []
+          | BOOL, Some (DTYPE BOOL) -> []
+          | _, Some dt ->
+              [
+                Utils.format_msg e_pos
+                  (Printf.sprintf
+                     "Function: '%s's return expression of %s doesn't match \
+                      declared %s!"
+                     fdetails.fname (format_expr_type dt)
+                     (Ast.format_dtype func_rettype));
+              ]
+          | _, None ->
+              [
+                Utils.format_msg e_pos
+                  (Printf.sprintf
+                     "Function: '%s's return expression of dtype('none') \
+                      doesn't match declared  %s!"
+                     fdetails.fname
+                     (Ast.format_dtype func_rettype));
+              ])
+      | (NONE, e_pos), true -> []
+      | (EXPR e, e_pos), true -> (
+          (* if function uses optional types and return expression contains optional types, it is valid *)
+          match (func_rettype, get_expr_type e fdetails.env) with
+          | INT, Some (OPTION_DTYPE INT) -> []
+          | BOOL, Some (OPTION_DTYPE BOOL) -> []
+          | _, _ ->
+              [
+                Utils.format_msg e_pos
+                  (Printf.sprintf
+                     "Function: function '%s' expects optional return \
+                      expressions - 'Some (return expression)' or 'None'!"
+                     fdetails.fname);
+              ])
+      (* --invalid path-- *)
+      | (SOME_EXPR e, e_pos), false ->
+          [
+            Utils.format_msg e_pos
+              (Printf.sprintf
+                 "Function: function '%s' expects non-optional return \
+                  expressions. Found 'Some (return expression)'!"
+                 fdetails.fname);
+          ]
+      | (NONE, e_pos), false ->
+          [
+            Utils.format_msg e_pos
+              (Printf.sprintf
+                 "Function: function '%s' expects non-optional return \
+                  expressions. Found 'None'!"
+                 fdetails.fname);
+          ])
+  | VOID, _ -> []
 
 (* Functions *)
 (* function declaration *)
-and check_func_decl (func_decl : Ast.func_decl) : semantic_errors =
+and check_func_decl ((func_decl, pos) : Ast.func_decl) : semantic_errors =
   (* store func_decl *)
-  match func_decl with
-  | func, f_pos -> (
-      let fenv : scope_vars = Hashtbl.create hashtable_size in
-      (* store function declaration *)
-      Hashtbl.replace func_decls func.func_name
+  let fenv : scope_vars = Hashtbl.create hashtable_size in
+  let fname = match func_decl.func_name with IDENT n -> n in
+  let func_entry : func_details =
+    {
+      fname;
+      is_optional_type = func_decl.is_optional_type;
+      ret_type = func_decl.return_type;
+      params = func_decl.params;
+      body = func_decl.body;
+      env = fenv;
+    }
+  in
+  (* store function declaration *)
+  Hashtbl.replace func_decls func_decl.func_name func_entry;
+
+  (* initialize parameters in function env *)
+  List.iter
+    (fun (param_type, param_name) ->
+      Hashtbl.replace fenv param_name
         {
-          is_optional_type = func.is_optional_type;
-          ret_type = func.return_type;
-          params = func.params;
-          body = func.body;
-          env = fenv;
-        };
+          mut = true;
+          (* parameter can be modified *)
+          dtype = param_type;
+          assigned_val = IS_PARAM;
+        })
+    func_decl.params;
 
-      (* initialize parameters in function env *)
-      List.iter
-        (fun (param_type, param_name) ->
-          Hashtbl.replace fenv param_name
-            {
-              mut = true;
-              (* parameter can be modified *)
-              dtype = param_type;
-              assigned_val = IS_PARAM;
-            })
-        func.params;
-
-      let fname = match func.func_name with IDENT f -> f in
-      (* condition: each block must contain a maximum of 1 return expression (not including sub-blocks) *)
-      match check_func_block func.body fname with
+  (* condition: each block must contain a maximum of 1 return expression (not including sub-blocks) *)
+  match check_func_block func_decl.body fname with
+  | [] -> (
+      (* check block *)
+      match check_block func_decl.body func_entry with
       | [] -> (
-          (* check block *)
-          match check_block func.body fenv with
-          | [] -> (
-              (* condition: void function must not contain return expression *)
-              let ret_stmts = get_ret_expr_in_blk func.body true in
-              match func.return_type with
-              | DATATYPE func_rettype, _ -> (
-                  (* non-void function should return an expression *)
-                  match ret_stmts with
-                  | [] ->
-                      [
-                        Utils.format_msg f_pos
-                          (Printf.sprintf
-                             "Non-void Function: '%s' contains no return \
-                              expression!"
-                             fname);
-                      ]
-                  | _ ->
-                      (* check the type of each return expression and gather errors *)
-                      List.flatten
-                        (List.map
-                           (fun re ->
-                             (* check return expression *)
-                             match check_ret_expr re fenv with
-                             | [] -> (
-                                 (* condition: return type of function must match return expression's type *)
-                                 (* condition: return expressions in optional functions must use "Some" & "None" *)
-                                 match (re, func.is_optional_type) with
-                                 | (EXPR e, e_pos), false
-                                 | (SOME_EXPR e, e_pos), true -> (
-                                     match
-                                       (func_rettype, get_expr_type e fenv)
-                                     with
-                                     | INT, Some (DTYPE INT) -> []
-                                     | BOOL, Some (DTYPE BOOL) -> []
-                                     | _, Some dt ->
-                                         [
-                                           Utils.format_msg e_pos
-                                             (Printf.sprintf
-                                                "Function: '%s's return \
-                                                 expression of %s doesn't \
-                                                 match declared %s!"
-                                                fname
-                                                (Ast.format_dtype func_rettype)
-                                                (format_expr_type dt));
-                                         ]
-                                     | _, None ->
-                                         [
-                                           Utils.format_msg e_pos
-                                             (Printf.sprintf
-                                                "Function: '%s's return \
-                                                 expression of dtype('none') \
-                                                 doesn't match declared  %s!"
-                                                fname
-                                                (Ast.format_dtype func_rettype));
-                                         ])
-                                 | (NONE, e_pos), true -> []
-                                 | (EXPR e, e_pos), true -> (
-                                     (* if function uses optional types and return expression contains optional types, it is valid *)
-                                     match
-                                       (func_rettype, get_expr_type e fenv)
-                                     with
-                                     | INT, Some (OPTION_DTYPE INT) -> []
-                                     | BOOL, Some (OPTION_DTYPE BOOL) -> []
-                                     | _, _ ->
-                                         [
-                                           Utils.format_msg e_pos
-                                             (Printf.sprintf
-                                                "Function: function '%s' \
-                                                 expects optional return \
-                                                 expressions - 'Some (return \
-                                                 expression)' or 'None'!"
-                                                fname);
-                                         ])
-                                 (* --invalid path-- *)
-                                 | (SOME_EXPR e, e_pos), false ->
-                                     [
-                                       Utils.format_msg e_pos
-                                         (Printf.sprintf
-                                            "Function: function '%s' expects \
-                                             non-optional return expressions. \
-                                             Found 'Some (return expression)'!"
-                                            fname);
-                                     ]
-                                 | (NONE, e_pos), false ->
-                                     [
-                                       Utils.format_msg e_pos
-                                         (Printf.sprintf
-                                            "Function: function '%s' expects \
-                                             non-optional return expressions. \
-                                             Found 'None'!"
-                                            fname);
-                                     ])
-                             | _ ->
-                                 [
-                                   Utils.format_msg f_pos
-                                     (Printf.sprintf
-                                        "Function: non-void function '%s' \
-                                         contains multiple return expressions \
-                                         in the same block!"
-                                        fname);
-                                 ])
-                           ret_stmts))
-              | VOID, _ -> (
-                  (* void function shouldn't contain return expressions *)
-                  match ret_stmts with
-                  | [] -> []
-                  | _ ->
-                      [
-                        Utils.format_msg f_pos
-                          (Printf.sprintf
-                             "Function: void function '%s' cannot return a \
-                              value!"
-                             fname);
-                      ]))
-          | blk_errs ->
-              Utils.format_msg f_pos
-                (Printf.sprintf "Function:'%s' contains invalid block!" fname)
-              :: blk_errs)
-      | fd_errs -> fd_errs)
+          (* condition: void function must not contain return expression *)
+          let ret_stmts = get_ret_expr_in_blk func_decl.body true in
+          match func_decl.return_type with
+          | DATATYPE func_rettype, _ -> (
+              (* non-void function should return an expression *)
+              match ret_stmts with
+              | [] ->
+                  [
+                    Utils.format_msg pos
+                      (Printf.sprintf
+                         "Non-void Function: '%s' contains no return \
+                          expression!"
+                         fname);
+                  ]
+              | _ -> [])
+          | VOID, _ -> (
+              (* void function shouldn't contain return expressions *)
+              match ret_stmts with
+              | [] -> []
+              | _ ->
+                  [
+                    Utils.format_msg pos
+                      (Printf.sprintf
+                         "Function: void function '%s' cannot return a value!"
+                         fname);
+                  ]))
+      | blk_errs ->
+          Utils.format_msg pos
+            (Printf.sprintf "Function:'%s' contains invalid block!" fname)
+          :: blk_errs)
+  | fd_errs -> fd_errs
 
 (* function call *)
-and check_func_call (func_call : Ast.func_call) (env : scope_vars) :
+and check_func_call ((func_call, pos) : Ast.func_call) (env : scope_vars) :
     semantic_errors =
-  match func_call with
-  | func, pos -> (
-      let fname = match func.func_name with IDENT f -> f in
-      (* check if function has been defined *)
-      match Hashtbl.find_opt func_decls func.func_name with
-      | Some ent -> (
-          (* check each expression in the list of arguments *)
-          let errs =
-            List.fold_left
-              (fun acc exp -> acc @ check_expr exp env)
-              [] func.args
-          in
-          match errs with
-          (* compare parameters with arguments *)
-          | [] -> compare_params_with_args ent.params func.args env pos fname
-          | errors -> errors)
-      | None ->
-          (* func doesnt exist in our env *)
-          [
-            Utils.format_msg pos
-              (Printf.sprintf "Function Call: call to undefined function '%s'!"
-                 fname);
-          ])
+  let fname = match func_call.func_name with IDENT f -> f in
+  (* check if function has been defined *)
+  match Hashtbl.find_opt func_decls func_call.func_name with
+  | Some ent -> (
+      (* check each expression in the list of arguments *)
+      let errs =
+        List.fold_left
+          (fun acc exp -> acc @ check_expr exp env)
+          [] func_call.args
+      in
+      match errs with
+      (* compare parameters with arguments *)
+      | [] -> compare_params_with_args ent.params func_call.args env pos fname
+      | errors -> errors)
+  | None ->
+      (* func doesnt exist in our env *)
+      [
+        Utils.format_msg pos
+          (Printf.sprintf "Function Call: call to undefined function '%s'!"
+             fname);
+      ]
 
 and check_func_block (block : Ast.block) (func_name : string) : semantic_errors
     =
@@ -704,50 +672,52 @@ and compare_params_with_args (params : Ast.param_list) (args : Ast.arg_list)
   loop params args []
 
 (* Statement *)
-and check_stmt (stmt : Ast.stmt) (env : scope_vars) : semantic_errors =
+and check_stmt (stmt : Ast.stmt) (fdetails : func_details) : semantic_errors =
   (* check stmt *)
   match stmt with
-  | VARDECL vd -> check_var_decl vd env
-  | ASST at -> check_asst at env false
-  | LOOP lp -> check_loop lp env
-  | IF (cond, blk) -> check_cond_expr cond env @ check_block blk env
+  | VARDECL vd -> check_var_decl vd fdetails.env
+  | ASST at -> check_asst at fdetails.env false
+  | LOOP lp -> check_loop lp fdetails
+  | IF (cond, blk) ->
+      check_cond_expr cond fdetails.env
+      @ check_block blk { fdetails with env = Hashtbl.copy fdetails.env }
   | IF_ELSE ((cond, if_blk), else_blk) ->
-      check_cond_expr cond env @ check_block if_blk env
-      @ check_block else_blk env
-  | RETURN ret_expr -> (
-      match ret_expr with
-      | EXPR e, _ | SOME_EXPR e, _ -> check_expr e env
-      | NONE, _ -> [])
-  | EXP e -> check_expr e env
+      check_cond_expr cond fdetails.env
+      @ check_block if_blk { fdetails with env = Hashtbl.copy fdetails.env }
+      @ check_block else_blk { fdetails with env = Hashtbl.copy fdetails.env }
+  | RETURN ret_expr -> check_ret_expr ret_expr fdetails
+  | EXP e -> check_expr e fdetails.env
   | EMPTY -> []
 
 (* Block *)
-and check_block (block : Ast.block) (env : scope_vars) : semantic_errors =
+and check_block (block : Ast.block) (fdetails : func_details) : semantic_errors
+    =
   (* check each statement in block *)
   match block with
   | STMTS stmts, _ ->
-      List.fold_left (fun acc st -> acc @ check_stmt st env) [] stmts
+      List.fold_left (fun acc st -> acc @ check_stmt st fdetails) [] stmts
 
 (* Loops *)
-and check_loop (loop : Ast.loop) (env : scope_vars) : semantic_errors =
+and check_loop (loop : Ast.loop) (fdetails : func_details) : semantic_errors =
   match loop with
   (* check while loop *)
   | WHILE while_lp, _ ->
-      check_cond_expr while_lp.cond env @ check_block while_lp.body env
+      check_cond_expr while_lp.cond fdetails.env
+      @ check_block while_lp.body fdetails
   (* check for loop *)
   | FOR for_lp, _ ->
       (*
        enforce evaluation order 
       @ doesnt guarantee left-to-right evaluation and I spent way too much time debugging this :)
       *)
-      let init_errs = check_decl_asst for_lp.init env in
-      let cond_errs = check_cond_expr for_lp.cond env in
+      let init_errs = check_decl_asst for_lp.init fdetails.env in
+      let cond_errs = check_cond_expr for_lp.cond fdetails.env in
       let update_errs =
         match for_lp.update with
-        | INC i, p -> check_expr (Ast.INCREMENT i, p) env
-        | UPDATE_ASST at, _ -> check_asst at env false
+        | INC i, p -> check_expr (Ast.INCREMENT i, p) fdetails.env
+        | UPDATE_ASST at, _ -> check_asst at fdetails.env false
       in
-      let body_errs = check_block for_lp.body env in
+      let body_errs = check_block for_lp.body fdetails in
       init_errs @ cond_errs @ update_errs @ body_errs
 
 (* --PUBLIC INTERFACE-- *)

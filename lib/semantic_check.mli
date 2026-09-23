@@ -14,6 +14,7 @@ type scope_vars =
   (Ast.ident, var_details) Hashtbl.t (* keeps track of variables *)
 
 type func_details = {
+  fname : string;
   is_optional_type : bool;
   ret_type : Ast.ret_type;
   params : Ast.param_list;

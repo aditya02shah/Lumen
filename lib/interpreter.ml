@@ -123,28 +123,32 @@ and eval_ret_expr ((ret_expr, pos) : Ast.ret_expr)
   | NONE -> raise Internal_error
 (* TODO: *)
 
-and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars) :
-    Semantic_check.eval_value option =
+and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars)
+    (already_processed : bool) : Semantic_check.eval_value option =
   match stmt with
   | VARDECL vd -> (
       match vd with
       (* store all the vars declared *)
-      | DECL (d, _) -> None
+      | DECL (d, _) ->
+          if already_processed then None
+          else
+            let decl_mut, decl_type = (d.mut, d.dtype) in
+            (* store all the variables declared *)
+            List.iter
+              (fun var_name ->
+                Hashtbl.replace env var_name
+                  { mut = decl_mut; dtype = decl_type; assigned_val = NONE })
+              d.vars;
+            None
       | DECL_ASST (da, _) -> (
           (* store var *)
           match da.asst with
           | at, _ -> (
-              let varname = at.name in
-              let entry = Hashtbl.find env varname in
               (* evaluate expr assigned to var & update env *)
               match eval_expr at.expr env with
               | Some v ->
                   Hashtbl.replace env at.name
-                    {
-                      mut = entry.mut;
-                      dtype = entry.dtype;
-                      assigned_val = VAL v;
-                    };
+                    { mut = da.mut; dtype = da.dtype; assigned_val = VAL v };
                   None
               | None -> raise Internal_error)))
   | ASST (at, _) -> (
@@ -157,22 +161,22 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars) :
             { mut = entry.mut; dtype = entry.dtype; assigned_val = VAL v };
           None
       | None -> raise Internal_error)
-  | LOOP lp -> process_loop lp env
+  | LOOP lp -> process_loop lp env already_processed
   | IF (ce, blk) ->
       (* evaluate condition *)
       let cond = eval_cond_expr ce env in
       (* create new scope for block *)
       let block_scope = Hashtbl.copy env in
       (* if condition is true process block *)
-      if cond then process_block blk block_scope else None
+      if cond then process_block blk block_scope false else None
   | IF_ELSE ((ce, if_blk), else_blk) ->
       (* evaluate condition *)
       let cond = eval_cond_expr ce env in
       (* create new scope for block *)
       let if_scope, else_scope = (Hashtbl.copy env, Hashtbl.copy env) in
       (* if condition is true process if_blk, otherwise process else_blk *)
-      if cond then process_block if_blk if_scope
-      else process_block else_blk else_scope
+      if cond then process_block if_blk if_scope false
+      else process_block else_blk else_scope false
   | RETURN ret_expr -> None
   | EXP expr ->
       (* execute expression to introduce intended side-effects *)
@@ -181,8 +185,8 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars) :
   | EMPTY -> None
 
 and process_block ((blk, pos) : Ast.block)
-    (block_scope : Semantic_check.scope_vars) : Semantic_check.eval_value option
-    =
+    (block_scope : Semantic_check.scope_vars) (already_processed : bool) :
+    Semantic_check.eval_value option =
   (* collect statements in block *)
   let stmts = match blk with STMTS st -> st in
 
@@ -193,7 +197,7 @@ and process_block ((blk, pos) : Ast.block)
     | Ast.RETURN ret_expr :: st -> eval_ret_expr ret_expr block_scope
     | s :: st -> (
         (* process statement *)
-        match process_stmt s block_scope with
+        match process_stmt s block_scope already_processed with
         | Some ret_val -> Some ret_val (* found a return value *)
         | None -> process_func_body st (* continue executing statements *))
     | [] -> None
@@ -201,7 +205,8 @@ and process_block ((blk, pos) : Ast.block)
   process_func_body stmts
 
 and process_loop ((loop, pos) : Ast.loop)
-    (outer_env : Semantic_check.scope_vars) : Semantic_check.eval_value option =
+    (outer_env : Semantic_check.scope_vars) (already_processed : bool) :
+    Semantic_check.eval_value option =
   match loop with
   | WHILE { cond; body } ->
       let rec process_while (c : Ast.cond_expr) (b : Ast.block)
@@ -210,7 +215,7 @@ and process_loop ((loop, pos) : Ast.loop)
         (* evaluate condition *)
         if eval_cond_expr c scope then
           (* if condition is true, then process while body *)
-          match process_block b scope with
+          match process_block b scope already_processed with
           (* found return value so return it *)
           | Some v -> Some v
           (* repeat *)
@@ -221,7 +226,9 @@ and process_loop ((loop, pos) : Ast.loop)
       process_while cond body outer_env
   | FOR { init; cond; update; body } ->
       (* process initialization *)
-      ignore (process_stmt (Ast.VARDECL (Ast.DECL_ASST init)) outer_env);
+      ignore
+        (process_stmt (Ast.VARDECL (Ast.DECL_ASST init)) outer_env
+           already_processed);
 
       let rec process_for (c : Ast.cond_expr) (u : Ast.var_update)
           (b : Ast.block) (scope : Semantic_check.scope_vars) :
@@ -230,14 +237,15 @@ and process_loop ((loop, pos) : Ast.loop)
         if eval_cond_expr c scope then (
           (* process body *)
           (* if cond is true, process body & update *)
-          match process_block b scope with
+          match process_block b scope already_processed with
           | Some v -> Some v (* found return value so return it *)
           | None ->
               (* apply update *)
               ignore
                 (match u with
                 | INC i, p -> eval_expr (Ast.INCREMENT i, p) scope
-                | UPDATE_ASST at, _ -> process_stmt (Ast.ASST at) scope);
+                | UPDATE_ASST at, _ ->
+                    process_stmt (Ast.ASST at) scope already_processed);
               (* repeat *)
               process_for c u b scope)
         else None
@@ -267,7 +275,7 @@ and eval_func_call ((func_call, pos) : Ast.func_call)
     func_entry.params func_call.args;
 
   (* process function body by executing each statement in it *)
-  process_block func_entry.body scope
+  process_block func_entry.body scope true
 
 let eval_program (prog : Ast.prog) : Semantic_check.eval_value option =
   (* find main function *)
