@@ -1,0 +1,9 @@
+int add(int x, int y){
+    int res = x + y;
+    return res;
+}
+
+int main(){
+    int sum = add(2, -22);
+    return sum;
+}

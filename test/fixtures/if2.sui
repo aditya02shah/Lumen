@@ -1,0 +1,12 @@
+int add(int x, int y){
+    mut int res = x + y;
+    if (res > 10){
+        mut int zyx = x - y;
+        return zyx;
+    }
+    return res;
+}
+
+int main(){
+    return add(2, 3);
+}

@@ -1,0 +1,15 @@
+int sumn(int n){
+    mut int i = 1;
+    mut int sum = 0;
+    while (i <= n){
+        sum = sum + i;
+        i = i + 1;
+    }
+    return sum;
+    
+}
+
+int main(){
+    int res = sumn(10);
+    return res;
+}

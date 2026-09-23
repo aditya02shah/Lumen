@@ -1,0 +1,15 @@
+int add(int x, int y){
+    mut int res = x + y;
+    if (res > 10){
+        mut int resfinal = 0;
+        for (mut int i = 0; i < 100; i++){
+            resfinal = i;
+        }
+        return resfinal;
+    }
+    return res;
+}
+
+int main(){
+    return add(2, 13);
+}

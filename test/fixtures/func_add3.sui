@@ -1,0 +1,8 @@
+int add(int x, int y){
+    x = x + 2;
+    return x;
+}
+
+int main(){
+    return add(2, 3);
+}

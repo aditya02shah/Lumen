@@ -1,0 +1,23 @@
+  $ ../../bin/main.exe ../fixtures/func_add.sui
+  -20
+
+  $ ../../bin/main.exe ../fixtures/func_add2.sui
+  19
+
+  $ ../../bin/main.exe ../fixtures/if.sui
+  -11
+
+  $ ../../bin/main.exe ../fixtures/if2.sui
+  5
+
+  $ ../../bin/main.exe ../fixtures/if_for.sui
+  99
+
+  $ ../../bin/main.exe ../fixtures/if_else.sui
+  4
+
+  $ ../../bin/main.exe ../fixtures/while.sui
+  55
+
+  $ ../../bin/main.exe ../fixtures/for.sui
+  55

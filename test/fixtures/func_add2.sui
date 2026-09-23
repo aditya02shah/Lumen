@@ -1,0 +1,11 @@
+int add(int x, int y){
+    x = y + 2;
+    x = x + 5;
+    return x;
+}
+
+int main(){
+    int res = add(3, 4);
+
+    return add(10, 12);
+}

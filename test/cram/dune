@@ -1,4 +1,5 @@
 (cram
  (deps
   ../../bin/main.exe
-  (glob_files_rec ../../examples/*)))
+  (glob_files_rec ../../examples/*)
+  (glob_files_rec ../fixtures/*)))

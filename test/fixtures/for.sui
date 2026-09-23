@@ -1,0 +1,13 @@
+int sumn(int n){
+    mut int sum = 0;
+    for (mut int i = 1; i <= n; i = i + 1){
+        sum = sum + i;
+    }
+
+    return sum;
+}
+
+int main(){
+    int sum = sumn(10);
+    return sum;
+}

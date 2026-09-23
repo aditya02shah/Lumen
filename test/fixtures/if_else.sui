@@ -1,0 +1,17 @@
+int add(int x, int y){
+    mut int res = x + y;
+    if (res > 10){
+        res = x - y;
+        return res;
+    }
+    else {
+        int b = x ^ 2;
+        return b;
+    }
+    res = res - 10;
+    return res;
+}
+
+int main(){
+    return add(2, -4);
+}
