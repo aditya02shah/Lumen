@@ -1,0 +1,10 @@
+Option int add(){
+    mut int x = 0;
+    mut int y = 3;
+    int res = x + y;
+    return Some (res);
+}
+
+Option int main(){
+    return add();
+}

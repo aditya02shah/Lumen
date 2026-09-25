@@ -4,14 +4,17 @@
   $ ../../bin/main.exe ../fixtures/func_add2.sui
   19
 
-  $ ../../bin/main.exe ../fixtures/if.sui
+  $ ../../bin/main.exe ../fixtures/if1.sui
   -11
 
   $ ../../bin/main.exe ../fixtures/if2.sui
   5
 
-  $ ../../bin/main.exe ../fixtures/option.sui
+  $ ../../bin/main.exe ../fixtures/option1.sui
   3
+
+  $ ../../bin/main.exe ../fixtures/option2.sui
+  -1
 
 
   $ ../../bin/main.exe ../fixtures/option_let1.sui
@@ -20,6 +23,8 @@
   $ ../../bin/main.exe ../fixtures/option_let2.sui
   -1
 
+  $ ../../bin/main.exe ../fixtures/ctrl_flow.sui
+  -1
 
   $ ../../bin/main.exe ../fixtures/nested_if1.sui
   510

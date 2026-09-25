@@ -1,0 +1,15 @@
+Option int divide(int a, int b) {
+    if (b == 0) {
+        return None;
+    }
+    return Some (a / b);
+}
+
+int main(){
+    if (let x = divide(10, 0)){
+        return x;
+    }
+    else{
+        return -1;
+    }
+}

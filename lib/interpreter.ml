@@ -4,6 +4,7 @@ exception Negative_exponent (* negative exponents *)
 
 (* --TYPE DECLARATIONS-- *)
 type parent_scope = SCOPE of Semantic_check.scope_vars | NONE
+type eval_result = VALUE of Semantic_check.eval_value | RETURN_NONE
 
 (* --HELPER FUNCTIONS-- *)
 let rec pow (base : int) (exp : int) : int =
@@ -17,7 +18,9 @@ and get_var_value (var : Ast.ident) (env : Semantic_check.scope_vars) :
     Semantic_check.eval_value =
   match (Hashtbl.find env var).assigned_val with
   | EXPR e -> (
-      match eval_expr e env with Some v -> v | None -> raise Internal_error)
+      match eval_expr e env with
+      | Some (VALUE v) -> v
+      | _ -> raise Internal_error)
   | VAL v -> v
   | _ -> raise Internal_error
 
@@ -57,15 +60,15 @@ and eval_cond_expr (cond_expr : Ast.cond_expr) (env : Semantic_check.scope_vars)
       | LOGICAL_OR, _, _ -> true)
 
 and eval_expr ((expr, pos) : Ast.expr) (env : Semantic_check.scope_vars) :
-    Semantic_check.eval_value option =
+    eval_result option =
   (* evaluate expression *)
   match expr with
-  | INT n -> Some (INT n)
+  | INT n -> Some (VALUE (INT n))
   | VAR x -> (
       (* find var entry in env *)
       match (Hashtbl.find env x).assigned_val with
       | EXPR e -> eval_expr e env (* evaluate expr assigned to var *)
-      | VAL v -> Some v (* var value has already been evaluated *)
+      | VAL v -> Some (VALUE v) (* var value has already been evaluated *)
       | IS_PARAM -> raise Internal_error
       | NONE -> raise Internal_error)
   | INCREMENT x -> (
@@ -75,7 +78,7 @@ and eval_expr ((expr, pos) : Ast.expr) (env : Semantic_check.scope_vars) :
       | EXPR e -> (
           (* evaluate expr assigned to var & increment it *)
           match eval_expr e env with
-          | Some (INT i) ->
+          | Some (VALUE (INT i)) ->
               (* update value *)
               Hashtbl.replace env x
                 {
@@ -84,9 +87,9 @@ and eval_expr ((expr, pos) : Ast.expr) (env : Semantic_check.scope_vars) :
                   assigned_val = VAL (INT (i + 1));
                 };
               (* return it *)
-              Some (INT (i + 1))
-          | Some (BOOL _) -> raise Internal_error
-          | None -> raise Internal_error)
+              Some (VALUE (INT (i + 1)))
+          | Some (VALUE (BOOL _)) -> raise Internal_error
+          | _ -> raise Internal_error)
       | VAL v -> (
           (* var value has already been evaluated; increment it *)
           match v with
@@ -99,7 +102,7 @@ and eval_expr ((expr, pos) : Ast.expr) (env : Semantic_check.scope_vars) :
                   assigned_val = VAL (INT (i + 1));
                 };
               (* return it *)
-              Some (INT (i + 1))
+              Some (VALUE (INT (i + 1)))
           | BOOL _ -> raise Internal_error)
       | IS_PARAM -> raise Internal_error
       | NONE -> raise Internal_error)
@@ -107,26 +110,25 @@ and eval_expr ((expr, pos) : Ast.expr) (env : Semantic_check.scope_vars) :
   | BINARY (op, exp1, exp2) -> (
       (* evaluate arithmetic expression *)
       match (eval_expr exp1 env, eval_expr exp2 env) with
-      | Some (INT e1), Some (INT e2) -> (
+      | Some (VALUE (INT e1)), Some (VALUE (INT e2)) -> (
           match op with
-          | ADD -> Some (INT (e1 + e2))
-          | SUBTRACT -> Some (INT (e1 - e2))
-          | MULTIPLY -> Some (INT (e1 * e2))
-          | DIVIDE -> Some (INT (e1 / e2))
-          | MOD -> Some (INT (e1 mod e2))
-          | POW -> Some (INT (pow e1 e2)))
+          | ADD -> Some (VALUE (INT (e1 + e2)))
+          | SUBTRACT -> Some (VALUE (INT (e1 - e2)))
+          | MULTIPLY -> Some (VALUE (INT (e1 * e2)))
+          | DIVIDE -> Some (VALUE (INT (e1 / e2)))
+          | MOD -> Some (VALUE (INT (e1 mod e2)))
+          | POW -> Some (VALUE (INT (pow e1 e2))))
       | _, _ -> raise Internal_error)
-  | COND ce -> Some (BOOL (eval_cond_expr ce env))
+  | COND ce -> Some (VALUE (BOOL (eval_cond_expr ce env)))
 
 and eval_ret_expr ((ret_expr, pos) : Ast.ret_expr)
-    (env : Semantic_check.scope_vars) : Semantic_check.eval_value option =
+    (env : Semantic_check.scope_vars) : eval_result option =
   match ret_expr with
-  | EXPR e -> eval_expr e env
-  | SOME_EXPR e -> eval_expr e env
-  | NONE -> None
+  | EXPR e | SOME_EXPR e -> eval_expr e env
+  | NONE -> Some RETURN_NONE
 
 and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars)
-    (already_processed : bool) : Semantic_check.eval_value option =
+    (already_processed : bool) : eval_result option =
   match stmt with
   | VARDECL vd -> (
       match vd with
@@ -148,21 +150,21 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars)
           | at, _ -> (
               (* evaluate expr assigned to var & update env *)
               match eval_expr at.expr env with
-              | Some v ->
+              | Some (VALUE v) ->
                   Hashtbl.replace env at.name
                     { mut = da.mut; dtype = da.dtype; assigned_val = VAL v };
                   None
-              | None -> raise Internal_error)))
+              | _ -> raise Internal_error)))
   | ASST (at, _) -> (
       let varname = at.name in
       let entry = Hashtbl.find env varname in
       (* evaluate expr assigned to var & update env *)
       match eval_expr at.expr env with
-      | Some v ->
+      | Some (VALUE v) ->
           Hashtbl.replace env at.name
             { mut = entry.mut; dtype = entry.dtype; assigned_val = VAL v };
           None
-      | None -> raise Internal_error)
+      | _ -> raise Internal_error)
   | LOOP lp -> process_loop lp env already_processed
   | IF (ce, blk) ->
       (* evaluate condition *)
@@ -184,7 +186,7 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars)
       | fc, pos -> (
           match eval_func_call func_call env with
           (* evaluate function call *)
-          | Some v -> (
+          | Some (VALUE v) -> (
               (* function return some value, and is of optional type; thus, we process if block *)
               let fname = fc.func_name in
               let fentry = Hashtbl.find Semantic_check.func_decls fname in
@@ -199,8 +201,7 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars)
                   (* if ret expr some, process if. else else *)
                   process_block if_blk env_with_var false (SCOPE env)
               | VOID -> raise Internal_error)
-          | None -> process_block else_blk (Hashtbl.copy env) false (SCOPE env))
-      )
+          | _ -> process_block else_blk (Hashtbl.copy env) false (SCOPE env)))
   | RETURN ret_expr -> None
   | EXP expr ->
       (* execute expression to introduce intended side-effects *)
@@ -210,7 +211,7 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars)
 
 and process_block ((blk, pos) : Ast.block)
     (block_scope : Semantic_check.scope_vars) (already_processed : bool)
-    (parent_scope : parent_scope) : Semantic_check.eval_value option =
+    (parent_scope : parent_scope) : eval_result option =
   (* collect statements in block *)
   let stmts = match blk with STMTS st -> st in
 
@@ -256,12 +257,11 @@ and update_parent_scope (child_scope : Semantic_check.scope_vars)
 
 and process_loop ((loop, pos) : Ast.loop)
     (outer_env : Semantic_check.scope_vars) (already_processed : bool) :
-    Semantic_check.eval_value option =
+    eval_result option =
   match loop with
   | WHILE { cond; body } ->
       let rec process_while (c : Ast.cond_expr) (b : Ast.block)
-          (scope : Semantic_check.scope_vars) : Semantic_check.eval_value option
-          =
+          (scope : Semantic_check.scope_vars) : eval_result option =
         (* evaluate condition *)
         if eval_cond_expr c scope then
           (* if condition is true, then process while body *)
@@ -282,7 +282,7 @@ and process_loop ((loop, pos) : Ast.loop)
 
       let rec process_for (c : Ast.cond_expr) (u : Ast.var_update)
           (b : Ast.block) (scope : Semantic_check.scope_vars) :
-          Semantic_check.eval_value option =
+          eval_result option =
         (* check cond *)
         if eval_cond_expr c scope then (
           (* process body *)
@@ -303,8 +303,7 @@ and process_loop ((loop, pos) : Ast.loop)
       process_for cond update body outer_env
 
 and eval_func_call ((func_call, pos) : Ast.func_call)
-    (caller_env : Semantic_check.scope_vars) : Semantic_check.eval_value option
-    =
+    (caller_env : Semantic_check.scope_vars) : eval_result option =
   let func_entry = Hashtbl.find Semantic_check.func_decls func_call.func_name in
   (* create copy of scope so evaluated values are dropped when we go out of scope *)
   let scope = Hashtbl.copy func_entry.env in
@@ -313,7 +312,7 @@ and eval_func_call ((func_call, pos) : Ast.func_call)
   List.iter2
     (fun (param_dtype, param_name) asst_expr ->
       match eval_expr asst_expr caller_env with
-      | Some v ->
+      | Some (VALUE v) ->
           Hashtbl.replace scope param_name
             {
               mut = true;
@@ -321,7 +320,7 @@ and eval_func_call ((func_call, pos) : Ast.func_call)
               dtype = param_dtype;
               assigned_val = VAL v;
             }
-      | None -> raise Internal_error)
+      | _ -> raise Internal_error)
     func_entry.params func_call.args;
 
   (* process function body by executing each statement in it *)
@@ -334,5 +333,8 @@ let eval_program (prog : Ast.prog) : Semantic_check.eval_value option =
     ({ func_name = main_func; args = [] }, 0)
   in
   match Hashtbl.find_opt Semantic_check.func_decls main_func with
-  | Some entry -> eval_func_call main_func_call entry.env
+  | Some entry -> (
+      match eval_func_call main_func_call entry.env with
+      | Some (VALUE v) -> Some v
+      | _ -> None)
   | None -> None
