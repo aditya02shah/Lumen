@@ -1,6 +1,4 @@
 (* --TYPE DECLARATIONS-- *)
-type dtype = INT | BOOL (* supported datatypes *)
-
 (* Recognised tokens *)
 type token =
   (* data *)
@@ -15,11 +13,12 @@ type token =
   | IF
   | ELSE
   (* syntax *)
-  | DATATYPE of dtype
+  | DATATYPE of Ast.dtype
   | VOID
   | OPTION
   | SOME
   | NONE
+  | LET
   | ASSIGNMENT
   | WHITESPACE
   | SEMICOLON
@@ -49,16 +48,24 @@ type token =
   | NOT
   | UNKNOWN of string (* unrecognized tokens *)
 
-(* position-aware types *)
-type position = int (* line number *)
-type located_str = string * position (* source strings *)
-type located_token = token * position (* source tokens *)
+type partial_token =
+  (* helps handle tokens spanning multiple characters *)
+  | DIGIT
+  | CHAR
+  | NEGATIVE_DIGIT
+  | WS
+
+type accum =
+  (* type representing accumlated tokens *)
+  | Accum of char list * partial_token
+  | Empty
+
+(* Position-aware types *)
+type located_str = string * Ast.position (* source strings *)
+type located_token = token * Ast.position (* source tokens *)
 type lexer_errors = located_token list (* source errors *)
 
-(* --HELPER FUNCTIONS-- *)
-val print_list : ('a -> string) -> 'a list -> unit
 val format_token : token -> string
-val format_dtype : dtype -> string
 
 (* --PUBLIC INTERFACE-- *)
 val tokenize : string -> located_token list * lexer_errors

@@ -919,15 +919,95 @@ and match_ctrl_flow (tokens : Lexer.located_token list)
                 tokens,
                 [ Utils.format_msg pos "If: contains invalid block!" ]
                 @ blk_errs @ ce_errs @ prev_errs ))
-      | _, _, ce_errs ->
+      | _, _, ce_errs -> (
+          match match_optional tokens with
+          | Some st, rem, opt_errs -> (Some st, rem, opt_errs)
+          | _, _, opt_errs ->
+              ( None,
+                tokens,
+                [
+                  Utils.format_msg pos
+                    "If: contains invalid conditional expression or let \
+                     statement!";
+                ]
+                @ ce_errs @ prev_errs @ opt_errs )))
+  | _ -> (None, tokens, prev_errs)
+
+and match_optional (tokens : Lexer.located_token list) :
+    Ast.stmt option * Lexer.located_token list * parser_errors =
+  (* optional = if (let ident = func_call) block else block *)
+  match tokens with
+  | (IF, pos)
+    :: (L_PAREN, _)
+    :: (LET, _)
+    :: (IDENTIFIER vname, _)
+    :: (ASSIGNMENT, _)
+    :: rem_tokens -> (
+      (* try to match func_call *)
+      match match_func_call rem_tokens pos with
+      | Some fc, (R_PAREN, _) :: rem_tok, fc_errs -> (
+          (* try to match if block *)
+          match match_block rem_tok with
+          | Some if_blk, (ELSE, _) :: rem, if_blk_errs -> (
+              (* try to match else block *)
+              match match_block rem with
+              | Some else_blk, r, else_blk_errs ->
+                  ( Some
+                      (LET
+                         ( ({ var = IDENT vname; func_call = fc }, if_blk),
+                           else_blk )),
+                    r,
+                    fc_errs @ if_blk_errs @ else_blk_errs )
+              | _, _, else_blk_errs ->
+                  (None, tokens, fc_errs @ if_blk_errs @ else_blk_errs))
+          (* --invalid paths-- *)
+          | Some if_blk, (tok, _) :: rem, if_blk_errs ->
+              ( None,
+                tokens,
+                [
+                  Utils.format_msg pos
+                    (Printf.sprintf
+                       "Control flow (optional): expected 'else'. Found '%s'!"
+                       (Lexer.format_token tok));
+                ] )
+          | _, _, if_blk_errs -> (None, tokens, fc_errs @ if_blk_errs))
+      | Some fc, (tok, pos) :: rem_tok, fc_errs ->
           ( None,
             tokens,
             [
               Utils.format_msg pos
-                "If: contains invalid conditional expression!";
-            ]
-            @ ce_errs @ prev_errs ))
-  | _ -> (None, tokens, prev_errs)
+                (Printf.sprintf
+                   "Control flow (optional): expected ')'. Found! %s!"
+                   (Lexer.format_token tok));
+            ] )
+      | _, _, fc_errs -> (None, tokens, fc_errs))
+  (* --invalid paths-- *)
+  | (IF, pos) :: (L_PAREN, _) :: (IDENTIFIER vname, _) :: (tok, _) :: rem ->
+      ( None,
+        tokens,
+        [
+          Utils.format_msg pos
+            (Printf.sprintf "Control flow (optional): expected '='. Found! %s!"
+               (Lexer.format_token tok));
+        ] )
+  | (IF, pos) :: (L_PAREN, _) :: (tok, _) :: rem ->
+      ( None,
+        tokens,
+        [
+          Utils.format_msg pos
+            (Printf.sprintf
+               "Control flow (optional): expected 'let'. Found! %s!"
+               (Lexer.format_token tok));
+        ] )
+  | (IF, pos) :: (tok, _) :: rem ->
+      ( None,
+        tokens,
+        [
+          Utils.format_msg pos
+            (Printf.sprintf "Control flow (optional): expected '('. Found! %s!"
+               (Lexer.format_token tok));
+        ] )
+  | _ -> (None, tokens, [])
 
 (* Block *)
 and match_block (tokens : Lexer.located_token list) :

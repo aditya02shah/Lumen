@@ -95,11 +95,14 @@ and stmt =
   | LOOP of loop
   | IF of if_stmt
   | IF_ELSE of if_stmt * else_stmt
+  | LET of if_let_stmt * else_stmt
   | RETURN of ret_expr
   | EXP of expr
   | EMPTY
 
 and if_stmt = cond_expr * block
+and if_let_stmt = let_stmt * block
+and let_stmt = { var : ident; func_call : func_call }
 and else_stmt = block
 
 (* Block *)

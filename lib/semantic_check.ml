@@ -413,6 +413,9 @@ and get_ret_expr_in_blk (func_blk : Ast.block) (include_sub_blocks : bool) :
             | Ast.IF_ELSE ((cond, if_blk), else_blk) ->
                 (acc @ get_ret_expr_in_blk if_blk true)
                 @ get_ret_expr_in_blk else_blk true
+            | Ast.LET ((let_stmt, if_blk), else_blk) ->
+                (acc @ get_ret_expr_in_blk if_blk true)
+                @ get_ret_expr_in_blk else_blk true
             | Ast.LOOP lp -> (
                 match lp with
                 | WHILE lp, _ -> acc @ get_ret_expr_in_blk lp.body true
@@ -685,9 +688,72 @@ and check_stmt (stmt : Ast.stmt) (fdetails : func_details) : semantic_errors =
       check_cond_expr cond fdetails.env
       @ check_block if_blk { fdetails with env = Hashtbl.copy fdetails.env }
       @ check_block else_blk { fdetails with env = Hashtbl.copy fdetails.env }
+  | LET _ -> check_let_stmt stmt fdetails
   | RETURN ret_expr -> check_ret_expr ret_expr fdetails
   | EXP e -> check_expr e fdetails.env
   | EMPTY -> []
+
+and check_let_stmt (stmt : Ast.stmt) (fdetails : func_details) : semantic_errors
+    =
+  match stmt with
+  | LET (({ var; func_call }, if_blk), else_blk) -> (
+      let fc, fc_name, pos =
+        match func_call with
+        | fc, pos -> ( match fc.func_name with IDENT f -> (fc, f, pos))
+      in
+
+      match check_func_call func_call fdetails.env with
+      | [] -> (
+          let func_called_entry = Hashtbl.find func_decls fc.func_name in
+          if
+            (* condition: function called must be of optional type *)
+            not func_called_entry.is_optional_type
+          then
+            [
+              Utils.format_msg pos
+                (Printf.sprintf
+                   "Let: cannot use non-optional function %s in a let \
+                    statement!"
+                   fc_name);
+            ]
+          else
+            let ret_type =
+              match func_called_entry.ret_type with rt, pos -> rt
+            in
+
+            match ret_type with
+            | DATATYPE dt -> (
+                (* create var *)
+                (* var only exists within the if block scope/env *)
+                let env_with_var = Hashtbl.copy fdetails.env in
+                Hashtbl.replace env_with_var var
+                  {
+                    mut = false;
+                    dtype = dt;
+                    assigned_val = EXPR (Ast.FUNC_CALL func_call, pos);
+                  };
+                match
+                  check_block if_blk { fdetails with env = env_with_var }
+                with
+                | [] -> (
+                    match
+                      check_block else_blk
+                        (* else block scope/env doesnt contain var *)
+                        { fdetails with env = Hashtbl.copy fdetails.env }
+                    with
+                    | [] -> []
+                    | else_blk_errs -> else_blk_errs)
+                | if_blk_errs -> if_blk_errs)
+            | VOID ->
+                [
+                  Utils.format_msg pos
+                    (Printf.sprintf
+                       "Let: cannot use optional types with a void function %s \
+                        in a let statement!"
+                       fc_name);
+                ])
+      | fc_errs -> fc_errs)
+  | _ -> []
 
 (* Block *)
 and check_block (block : Ast.block) (fdetails : func_details) : semantic_errors

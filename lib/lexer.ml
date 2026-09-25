@@ -18,6 +18,7 @@ type token =
   | OPTION
   | SOME
   | NONE
+  | LET
   | ASSIGNMENT
   | WHITESPACE
   | SEMICOLON
@@ -91,6 +92,7 @@ let format_token (t : token) : string =
   | OPTION -> "'option'"
   | SOME -> "'some'"
   | NONE -> "'none'"
+  | LET -> "'let'"
   | ASSIGNMENT -> "'='"
   | WHITESPACE -> "whitespace"
   | SEMICOLON -> "';'"
@@ -164,14 +166,24 @@ let rec get_token (chars : char list) (acc : accum) : token option * char list =
           | Some remaining -> (Some NONE, remaining)
           | None -> get_token rest (Accum ([ c ], CHAR)))
       | 't' -> (
-          (* "true" *)
+          (* true *)
           match match_characters rest (string_to_char_list "rue") with
           | Some remaining -> (Some (BOOLEAN true), remaining)
           | None -> get_token rest (Accum ([ c ], CHAR)))
       | 'f' -> (
-          (* "false" *)
+          (* false *)
           match match_characters rest (string_to_char_list "alse") with
           | Some remaining -> (Some (BOOLEAN false), remaining)
+          | None -> get_token rest (Accum ([ c ], CHAR)))
+      | 'l' -> (
+          (* let *)
+          match match_characters rest (string_to_char_list "et") with
+          | Some remaining -> (Some LET, remaining)
+          | None -> get_token rest (Accum ([ c ], CHAR)))
+      | 'e' -> (
+          (* else *)
+          match match_characters rest (string_to_char_list "lse") with
+          | Some remaining -> (Some ELSE, remaining)
           | None -> get_token rest (Accum ([ c ], CHAR)))
       (* words *)
       | 'a' .. 'z' | 'A' .. 'Z' -> get_token rest (Accum ([ c ], CHAR))

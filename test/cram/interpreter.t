@@ -10,6 +10,17 @@
   $ ../../bin/main.exe ../fixtures/if2.sui
   5
 
+  $ ../../bin/main.exe ../fixtures/option.sui
+  3
+
+
+  $ ../../bin/main.exe ../fixtures/option_let1.sui
+  2
+
+  $ ../../bin/main.exe ../fixtures/option_let2.sui
+  -1
+
+
   $ ../../bin/main.exe ../fixtures/nested_if1.sui
   510
 

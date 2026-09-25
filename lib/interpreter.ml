@@ -122,9 +122,8 @@ and eval_ret_expr ((ret_expr, pos) : Ast.ret_expr)
     (env : Semantic_check.scope_vars) : Semantic_check.eval_value option =
   match ret_expr with
   | EXPR e -> eval_expr e env
-  | SOME_EXPR e -> eval_expr e env (* TODO: *)
-  | NONE -> raise Internal_error
-(* TODO: *)
+  | SOME_EXPR e -> eval_expr e env
+  | NONE -> None
 
 and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars)
     (already_processed : bool) : Semantic_check.eval_value option =
@@ -180,6 +179,28 @@ and process_stmt (stmt : Ast.stmt) (env : Semantic_check.scope_vars)
       (* if condition is true process if_blk, otherwise process else_blk *)
       if cond then process_block if_blk if_scope false (SCOPE env)
       else process_block else_blk else_scope false (SCOPE env)
+  | LET (({ var; func_call }, if_blk), else_blk) -> (
+      match func_call with
+      | fc, pos -> (
+          match eval_func_call func_call env with
+          (* evaluate function call *)
+          | Some v -> (
+              (* function return some value, and is of optional type; thus, we process if block *)
+              let fname = fc.func_name in
+              let fentry = Hashtbl.find Semantic_check.func_decls fname in
+              let ret_type = match fentry.ret_type with rt, pos -> rt in
+
+              (* add var to if block scope *)
+              match ret_type with
+              | DATATYPE dt ->
+                  let env_with_var = Hashtbl.copy env in
+                  Hashtbl.replace env_with_var var
+                    { mut = false; dtype = dt; assigned_val = VAL v };
+                  (* if ret expr some, process if. else else *)
+                  process_block if_blk env_with_var false (SCOPE env)
+              | VOID -> raise Internal_error)
+          | None -> process_block else_blk (Hashtbl.copy env) false (SCOPE env))
+      )
   | RETURN ret_expr -> None
   | EXP expr ->
       (* execute expression to introduce intended side-effects *)
