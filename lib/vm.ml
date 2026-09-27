@@ -15,6 +15,7 @@ type opcode =
   | CALL of address * operand list
   (* ctrl flow *)
   | JMP of address * address
+  | UNCONDITIONAL_JMP of address
   | RET
   (* data *)
   | LOAD_LOCAL of var_offset
@@ -118,6 +119,9 @@ let execute_operation (op : opcode) : operand option =
       (* update instruction pointer based on result *)
       let new_addr = match !flag with true -> br1_addr | false -> br2_addr in
       inst_ptr := new_addr;
+      None
+  | UNCONDITIONAL_JMP addr ->
+      inst_ptr := addr;
       None
   | RET -> (
       (* determine if stack frame has a return address *)

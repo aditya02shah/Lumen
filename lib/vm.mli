@@ -12,6 +12,7 @@ type opcode =
   | CALL of address * operand list
   (* ctrl flow *)
   | JMP of address * address
+  | UNCONDITIONAL_JMP of address
   | RET
   (* data *)
   | LOAD_LOCAL of var_offset
