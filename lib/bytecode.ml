@@ -1,9 +1,7 @@
-(* --EXCEPTIONS-- *)
-exception Internal_error (* should have been handled by the checker *)
-
 (* --TYPE DECLARATIONS-- *)
 type var_indices = (Ast.ident, int) Hashtbl.t
 
+(* --GLOBAL VARS-- *)
 let hashtable_size = 50
 
 (* --BYTECODE IMPLEMENTATION-- *)
@@ -60,13 +58,13 @@ let process_stmt (stmt : Ast.stmt) (env : var_indices) : Vm.opcode list =
               let idx = Hashtbl.length env in
               Hashtbl.add env at.name idx;
               match process_expr at.expr env with
-              | [] -> raise Internal_error
+              | [] -> raise Semantic_check.Internal_error
               | es -> es @ [ Vm.STORE_LOCAL idx ])))
   | ASST (at, _) -> (
       (* evaluate expr assigned to var & update env *)
       let var_idx = Hashtbl.find env at.name in
       match process_expr at.expr env with
-      | [] -> raise Internal_error
+      | [] -> raise Semantic_check.Internal_error
       | es -> es @ [ Vm.STORE_LOCAL var_idx ])
   | EXP expr -> process_expr expr env
   | RETURN ret_expr -> process_ret_expr ret_expr env

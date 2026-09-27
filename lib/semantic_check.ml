@@ -1,3 +1,6 @@
+(* --EXCEPTIONS-- *)
+exception Internal_error
+
 (* --TYPE DECLARATIONS-- *)
 type semantic_errors = string list
 
