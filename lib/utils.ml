@@ -15,3 +15,12 @@ let rec pow (base : int) (exp : int) : int =
   if exp < 0 then raise Negative_exponent
   else if exp = 0 then 1
   else base * pow base (exp - 1)
+
+let rec replace_list_element_at_idx (l : 'a list) (idx : int) (new_val : 'a) :
+    'a list =
+  (* replace element at a particular idx of the list *)
+  match l with
+  | [] -> []
+  | x :: xs ->
+      if idx = 0 then new_val :: xs
+      else x :: replace_list_element_at_idx xs (idx - 1) new_val
