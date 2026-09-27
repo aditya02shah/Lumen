@@ -7,13 +7,7 @@ type parent_scope = SCOPE of Semantic_check.scope_vars | NONE
 type eval_result = VALUE of Semantic_check.eval_value | RETURN_NONE
 
 (* --HELPER FUNCTIONS-- *)
-let rec pow (base : int) (exp : int) : int =
-  (* simple power function *)
-  if exp < 0 then raise Negative_exponent
-  else if exp = 0 then 1
-  else base * pow base (exp - 1)
-
-and get_var_value (var : Ast.ident) (env : Semantic_check.scope_vars) :
+let rec get_var_value (var : Ast.ident) (env : Semantic_check.scope_vars) :
     (* extracts value from variable *)
     Semantic_check.eval_value =
   match (Hashtbl.find env var).assigned_val with
@@ -117,7 +111,7 @@ and eval_expr ((expr, pos) : Ast.expr) (env : Semantic_check.scope_vars) :
           | MULTIPLY -> Some (VALUE (INT (e1 * e2)))
           | DIVIDE -> Some (VALUE (INT (e1 / e2)))
           | MOD -> Some (VALUE (INT (e1 mod e2)))
-          | POW -> Some (VALUE (INT (pow e1 e2))))
+          | POW -> Some (VALUE (INT (Utils.pow e1 e2))))
       | _, _ -> raise Internal_error)
   | COND ce -> Some (VALUE (BOOL (eval_cond_expr ce env)))
 
