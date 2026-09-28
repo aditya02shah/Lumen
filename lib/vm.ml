@@ -97,13 +97,15 @@ let rec execute_operation (op : opcode) : operand option =
           None
       | _ -> raise Internal_error)
   | CALL (address, operand_list) ->
+      (* store the next instruction to be executed after the function call *)
+      let next_inst = !inst_ptr + 1 in
       (* each operand can be a list of instructions itself *)
       let rec process_operands (op_list : opcode list) : operand =
         (* process each parameter *)
         match op_list with
-        | op :: rem ->
+        | p :: rem ->
             (* execute instruction *)
-            ignore (execute_operation op);
+            ignore (execute_operation p);
             process_operands rem
         | [] ->
             (* since each operand is an expressions, its evaluated value will be on top of the operand stack *)
@@ -113,8 +115,6 @@ let rec execute_operation (op : opcode) : operand option =
         List.map (fun operands -> process_operands operands) operand_list
       in
 
-      (* store the next instruction to be executed after the function call *)
-      let next_inst = !inst_ptr + 1 in
       (* create a new stack frame for the function call *)
       let new_stack_frame : stack_frame =
         {
