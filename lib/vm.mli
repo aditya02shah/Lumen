@@ -9,7 +9,7 @@ type opcode =
   | ARITHMETIC of Ast.arithmetic_op
   | BOOLEAN of Ast.logical_compare
   (* functions *)
-  | CALL of address * operand list
+  | CALL of address * opcode list list
   (* ctrl flow *)
   | JMP of address * address
   | UNCONDITIONAL_JMP of address
@@ -19,4 +19,4 @@ type opcode =
   | STORE_LOCAL of var_offset
   | PUSH_CONST of operand
 
-val run_program : opcode list -> unit
+val run_program : opcode list -> int -> unit

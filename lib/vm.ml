@@ -12,7 +12,7 @@ type opcode =
   | ARITHMETIC of Ast.arithmetic_op
   | BOOLEAN of Ast.logical_compare
   (* functions *)
-  | CALL of address * operand list
+  | CALL of address * opcode list list
   (* ctrl flow *)
   | JMP of address * address
   | UNCONDITIONAL_JMP of address
@@ -44,7 +44,7 @@ let flag : bool ref = ref false
 (* set by comparison operations; faciliates jump instructions for control flow *)
 
 (* --VM IMPLEMENTATION-- *)
-let execute_operation (op : opcode) : operand option =
+let rec execute_operation (op : opcode) : operand option =
   (* returns operand value executing the last instruction; otherwise returns None *)
   match op with
   | ARITHMETIC ap -> (
@@ -97,13 +97,28 @@ let execute_operation (op : opcode) : operand option =
           None
       | _ -> raise Internal_error)
   | CALL (address, operand_list) ->
+      (* each operand can be a list of instructions itself *)
+      let rec process_operands (op_list : opcode list) : operand =
+        (* process each parameter *)
+        match op_list with
+        | op :: rem ->
+            (* execute instruction *)
+            ignore (execute_operation op);
+            process_operands rem
+        | [] ->
+            (* since each operand is an expressions, its evaluated value will be on top of the operand stack *)
+            Stack.pop (Stack.top call_stack).operand_stack
+      in
+      let vars =
+        List.map (fun operands -> process_operands operands) operand_list
+      in
+
       (* store the next instruction to be executed after the function call *)
       let next_inst = !inst_ptr + 1 in
-
       (* create a new stack frame for the function call *)
       let new_stack_frame : stack_frame =
         {
-          local_var_region = operand_list;
+          local_var_region = vars;
           (* store arguments as local vars in the new stack frame *)
           operand_stack = Stack.create ();
           data_region = RET_ADDR next_inst;
@@ -181,7 +196,7 @@ let execute_operation (op : opcode) : operand option =
       inst_ptr := !inst_ptr + 1;
       None
 
-let run_program (byte_stream : opcode list) : unit =
+let run_program (byte_stream : opcode list) (main_offset : int) : unit =
   (* setup stack frame for main *)
   let main_stack_frame : stack_frame =
     {
@@ -192,6 +207,7 @@ let run_program (byte_stream : opcode list) : unit =
   in
   (* push stack frame onto call stack *)
   ignore (Stack.push main_stack_frame call_stack);
+  inst_ptr := main_offset;
 
   (* begin execution *)
   let rec process_program (byte_stream : opcode list) : unit =
