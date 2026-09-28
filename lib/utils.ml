@@ -24,3 +24,10 @@ let rec replace_list_element_at_idx (l : 'a list) (idx : int) (new_val : 'a) :
   | x :: xs ->
       if idx = 0 then new_val :: xs
       else x :: replace_list_element_at_idx xs (idx - 1) new_val
+
+let rec rotate_list (l : 'a list) (idx : int) (accum : 'a list) : 'a list =
+  match l with
+  | [] -> []
+  | x :: xs ->
+      if idx = 0 then (x :: xs) @ List.rev accum
+      else rotate_list xs (idx - 1) (x :: accum)
