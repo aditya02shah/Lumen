@@ -63,7 +63,7 @@ let process_ret_expr ((ret_expr, pos) : Ast.ret_expr) (env : var_indices) :
   | SOME_EXPR e -> [] (* TODO: *)
   | NONE -> [] (* TODO: *)
 
-let process_stmt (stmt : Ast.stmt) (env : var_indices) : Vm.opcode list =
+let rec process_stmt (stmt : Ast.stmt) (env : var_indices) : Vm.opcode list =
   match stmt with
   | VARDECL vd -> (
       match vd with
@@ -93,12 +93,21 @@ let process_stmt (stmt : Ast.stmt) (env : var_indices) : Vm.opcode list =
   | EXP expr -> process_expr expr env
   | RETURN ret_expr -> process_ret_expr ret_expr env
   | LOOP lp -> [] (* TODO: *)
-  | IF (ce, blk) -> [] (* TODO: *)
-  | IF_ELSE ((ce, if_blk), else_blk) -> [] (* TODO: *)
+  | IF (ce, blk) ->
+      let blk_instn = process_block blk (Hashtbl.copy env) in
+      process_cond_expr ce env
+      @ [ Vm.JMP (1, 1 + List.length blk_instn) ]
+      @ blk_instn
+  | IF_ELSE ((ce, if_blk), else_blk) ->
+      let if_blk_instn = process_block if_blk (Hashtbl.copy env) in
+      let else_blk_instn = process_block else_blk (Hashtbl.copy env) in
+      process_cond_expr ce env
+      @ [ Vm.JMP (1, 1 + List.length if_blk_instn) ]
+      @ if_blk_instn @ else_blk_instn
   | LET (({ var; func_call }, if_blk), else_blk) -> [] (* TODO: *)
   | EMPTY -> []
 
-let process_block ((blk, pos) : Ast.block) (env : var_indices) : Vm.opcode list
+and process_block ((blk, pos) : Ast.block) (env : var_indices) : Vm.opcode list
     =
   (* process each statement in block *)
   let stmts = match blk with STMTS st -> st in
