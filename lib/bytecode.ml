@@ -9,10 +9,25 @@ let hashtable_size = 50
 let func_details : (Ast.ident, int) Hashtbl.t = Hashtbl.create hashtable_size
 
 (* --BYTECODE IMPLEMENTATION-- *)
+let process_value ((value, pos) : Ast.value) (env : var_indices) :
+    Vm.opcode list =
+  match value with
+  | IDENTIFIER ident ->
+      let idx = Hashtbl.find env ident in
+      [ Vm.LOAD_LOCAL idx ]
+  | NUMBER i -> [ Vm.PUSH_CONST (INT i) ]
+
 let rec process_cond_expr (cond_expr : Ast.cond_expr) (env : var_indices) :
     Vm.opcode list =
-  (* TODO: *)
-  []
+  match cond_expr with
+  | BOOL_VAL (bv, _) -> (
+      match bv with
+      | BOOL b -> [ Vm.PUSH_CONST (BOOL b) ]
+      | VAL_CMP (cmp, v1, v2) ->
+          process_value v1 env @ process_value v2 env @ [ Vm.BOOLEAN cmp ])
+  | COMBINATION ((comb, ce1, ce2), _) ->
+      process_cond_expr ce1 env @ process_cond_expr ce2 env
+      @ [ Vm.LOGICAL_COMBINATION comb ]
 
 let rec process_expr ((expr, pos) : Ast.expr) (env : var_indices) :
     Vm.opcode list =

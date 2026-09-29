@@ -4,6 +4,7 @@ exception Internal_error (* should have been handled by the checker *)
 (* --TYPE DECLARATIONS-- *)
 type var_offset = int (* idx of local var *)
 type address = int
+type relative_address = int
 type operand = INT of int | BOOL of bool
 
 (* VM operations *)
@@ -11,11 +12,12 @@ type opcode =
   (* ALU *)
   | ARITHMETIC of Ast.arithmetic_op
   | BOOLEAN of Ast.logical_compare
+  | LOGICAL_COMBINATION of Ast.logical_combination
   (* functions *)
   | CALL of address * opcode list list
   (* ctrl flow *)
-  | JMP of address * address
-  | UNCONDITIONAL_JMP of address
+  | JMP of relative_address * relative_address
+  | UNCONDITIONAL_JMP of relative_address
   | RET
   (* data *)
   | LOAD_LOCAL of var_offset
@@ -96,6 +98,27 @@ let rec execute_operation (op : opcode) : operand option =
           inst_ptr := !inst_ptr + 1;
           None
       | _ -> raise Internal_error)
+  | LOGICAL_COMBINATION lc -> (
+      let operand_st = (Stack.top call_stack).operand_stack in
+      let val2 = Stack.pop operand_st in
+      let val1 = Stack.pop operand_st in
+
+      (* calculate result *)
+      match (val1, val2) with
+      | BOOL b1, BOOL b2 ->
+          let result =
+            match (lc, b1, b2) with
+            | LOGICAL_AND, true, true -> true
+            | LOGICAL_AND, _, _ -> false
+            | LOGICAL_OR, false, false -> false
+            | LOGICAL_OR, _, _ -> true
+          in
+          (* update flag with result *)
+          flag := result;
+          (* update instruction pointer *)
+          inst_ptr := !inst_ptr + 1;
+          None
+      | _ -> raise Internal_error)
   | CALL (address, operand_list) ->
       (* store the next instruction to be executed after the function call *)
       let next_inst = !inst_ptr + 1 in
@@ -130,13 +153,15 @@ let rec execute_operation (op : opcode) : operand option =
       (* update instruction pointer so we begin executing the function *)
       inst_ptr := address;
       None
-  | JMP (br1_addr, br2_addr) ->
+  | JMP (br1_rel_addr, br2_rel_addr) ->
       (* update instruction pointer based on result *)
-      let new_addr = match !flag with true -> br1_addr | false -> br2_addr in
-      inst_ptr := new_addr;
+      let rel_addr =
+        match !flag with true -> br1_rel_addr | false -> br2_rel_addr
+      in
+      inst_ptr := !inst_ptr + rel_addr;
       None
-  | UNCONDITIONAL_JMP addr ->
-      inst_ptr := addr;
+  | UNCONDITIONAL_JMP rel_addr ->
+      inst_ptr := !inst_ptr + rel_addr;
       None
   | RET -> (
       (* determine if stack frame has a return address *)
