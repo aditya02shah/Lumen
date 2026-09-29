@@ -445,27 +445,30 @@ and check_ret_expr (re : Ast.ret_expr) (fdetails : func_details) :
       (* condition: return expressions in optional functions must use "Some" & "None" *)
       match (re, fdetails.is_optional_type) with
       | (EXPR e, e_pos), false | (SOME_EXPR e, e_pos), true -> (
-          match (func_rettype, get_expr_type e fdetails.env) with
-          | INT, Some (DTYPE INT) -> []
-          | BOOL, Some (DTYPE BOOL) -> []
-          | _, Some dt ->
-              [
-                Utils.format_msg e_pos
-                  (Printf.sprintf
-                     "Function: '%s's return expression of %s doesn't match \
-                      declared %s!"
-                     fdetails.fname (format_expr_type dt)
-                     (Ast.format_dtype func_rettype));
-              ]
-          | _, None ->
-              [
-                Utils.format_msg e_pos
-                  (Printf.sprintf
-                     "Function: '%s's return expression of dtype('none') \
-                      doesn't match declared  %s!"
-                     fdetails.fname
-                     (Ast.format_dtype func_rettype));
-              ])
+          match check_expr e fdetails.env with
+          | [] -> (
+              match (func_rettype, get_expr_type e fdetails.env) with
+              | INT, Some (DTYPE INT) -> []
+              | BOOL, Some (DTYPE BOOL) -> []
+              | _, Some dt ->
+                  [
+                    Utils.format_msg e_pos
+                      (Printf.sprintf
+                         "Function: '%s's return expression of %s doesn't \
+                          match declared %s!"
+                         fdetails.fname (format_expr_type dt)
+                         (Ast.format_dtype func_rettype));
+                  ]
+              | _, None ->
+                  [
+                    Utils.format_msg e_pos
+                      (Printf.sprintf
+                         "Function: '%s's return expression of dtype('none') \
+                          doesn't match declared  %s!"
+                         fdetails.fname
+                         (Ast.format_dtype func_rettype));
+                  ])
+          | exp_errs -> exp_errs)
       | (NONE, e_pos), true -> []
       | (EXPR e, e_pos), true -> (
           (* if function uses optional types and return expression contains optional types, it is valid *)
