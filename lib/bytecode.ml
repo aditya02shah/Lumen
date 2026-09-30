@@ -63,7 +63,13 @@ let process_ret_expr ((ret_expr, pos) : Ast.ret_expr) (env : var_indices) :
   | SOME_EXPR e -> [] (* TODO: *)
   | NONE -> [] (* TODO: *)
 
-let rec process_stmt (stmt : Ast.stmt) (env : var_indices) : Vm.opcode list =
+let rec process_var_update ((var_upd, pos) : Ast.var_update) (env : var_indices)
+    : Vm.opcode list =
+  match var_upd with
+  | INC i -> process_expr (INCREMENT i, pos) env
+  | UPDATE_ASST at -> process_stmt (ASST at) env
+
+and process_stmt (stmt : Ast.stmt) (env : var_indices) : Vm.opcode list =
   match stmt with
   | VARDECL vd -> (
       match vd with
@@ -100,10 +106,21 @@ let rec process_stmt (stmt : Ast.stmt) (env : var_indices) : Vm.opcode list =
           let blk_inst = process_block body env in
           let blk_len = List.length blk_inst in
           cond_inst
-          @ [ Vm.JMP (1, 2 + blk_len) ]
+          @ [ Vm.JMP (1, blk_len + 2) ]
           @ blk_inst
           @ [ Vm.UNCONDITIONAL_JMP (-blk_len - cond_len - 1) ]
-      | FOR { init; cond; update; body } -> [])
+      | FOR { init; cond; update; body } ->
+          let init_inst = process_stmt (VARDECL (DECL_ASST init)) env in
+          let cond_inst = process_cond_expr cond env in
+          let cond_len = List.length cond_inst in
+          let blk_inst = process_block body env in
+          let blk_len = List.length blk_inst in
+          let upd_inst = process_var_update update env in
+          let upd_len = List.length upd_inst in
+          init_inst @ cond_inst
+          @ [ Vm.JMP (1, blk_len + upd_len + 2) ]
+          @ blk_inst @ upd_inst
+          @ [ Vm.UNCONDITIONAL_JMP (-upd_len - blk_len - cond_len - 1) ])
   | IF (ce, blk) ->
       let blk_inst = process_block blk (Hashtbl.copy env) in
       process_cond_expr ce env
