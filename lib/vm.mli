@@ -13,9 +13,13 @@ type opcode =
   (* functions *)
   | CALL of address * opcode list list
   (* ctrl flow *)
-  | JMP of relative_address * relative_address
+  | JMP of relative_address * relative_address (* boolean comparisons *)
   | UNCONDITIONAL_JMP of relative_address
   | RET
+  | RET_VOID
+  (* optional types *)
+  | JMP_OPT of relative_address * relative_address (* optional types *)
+  | SET_OPT_FLAG of bool
   (* data *)
   | LOAD_LOCAL of var_offset
   | STORE_LOCAL of var_offset

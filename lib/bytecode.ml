@@ -60,8 +60,8 @@ let process_ret_expr ((ret_expr, pos) : Ast.ret_expr) (env : var_indices) :
     Vm.opcode list =
   match ret_expr with
   | EXPR e -> process_expr e env @ [ Vm.RET ]
-  | SOME_EXPR e -> [] (* TODO: *)
-  | NONE -> [] (* TODO: *)
+  | SOME_EXPR e -> process_expr e env @ [ Vm.SET_OPT_FLAG true; Vm.RET ]
+  | NONE -> [ Vm.SET_OPT_FLAG false; Vm.RET_VOID ]
 
 let rec process_var_update ((var_upd, pos) : Ast.var_update) (env : var_indices)
     : Vm.opcode list =
@@ -128,11 +128,29 @@ and process_stmt (stmt : Ast.stmt) (env : var_indices) : Vm.opcode list =
       @ blk_inst
   | IF_ELSE ((ce, if_blk), else_blk) ->
       let if_blk_inst = process_block if_blk (Hashtbl.copy env) in
+      let if_blk_len = List.length if_blk_inst in
       let else_blk_inst = process_block else_blk (Hashtbl.copy env) in
+      let else_blk_len = List.length else_blk_inst in
       process_cond_expr ce env
-      @ [ Vm.JMP (1, 1 + List.length if_blk_inst) ]
-      @ if_blk_inst @ else_blk_inst
-  | LET (({ var; func_call }, if_blk), else_blk) -> [] (* TODO: *)
+      @ [ Vm.JMP (1, if_blk_len + 2) ]
+      @ if_blk_inst
+      @ [ Vm.UNCONDITIONAL_JMP (else_blk_len + 1) ]
+      @ else_blk_inst
+  | LET (({ var; func_call }, if_blk), else_blk) ->
+      let if_blk_env = Hashtbl.copy env in
+      Hashtbl.add if_blk_env var (Hashtbl.length if_blk_env);
+
+      let if_blk_inst = process_block if_blk if_blk_env in
+      let if_blk_len = List.length if_blk_inst in
+      let else_blk_inst = process_block else_blk (Hashtbl.copy env) in
+      let else_blk_len = List.length else_blk_inst in
+
+      process_expr (FUNC_CALL func_call, 0) env
+      @ [ Vm.JMP_OPT (1, if_blk_len + 3) ]
+      @ [ Vm.STORE_LOCAL (Hashtbl.find if_blk_env var) ]
+      @ if_blk_inst
+      @ [ Vm.UNCONDITIONAL_JMP (else_blk_len + 1) ]
+      @ else_blk_inst
   | EMPTY -> []
 
 and process_block ((blk, pos) : Ast.block) (env : var_indices) : Vm.opcode list

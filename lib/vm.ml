@@ -16,10 +16,13 @@ type opcode =
   (* functions *)
   | CALL of address * opcode list list
   (* ctrl flow *)
-  | JMP of relative_address * relative_address
+  | JMP of relative_address * relative_address (* boolean comparisons *)
   | UNCONDITIONAL_JMP of relative_address
   | RET
   | RET_VOID
+  (* optional types *)
+  | JMP_OPT of relative_address * relative_address (* optional types *)
+  | SET_OPT_FLAG of bool
   (* data *)
   | LOAD_LOCAL of var_offset
   | STORE_LOCAL of var_offset
@@ -43,8 +46,10 @@ let call_stack : stack_frame Stack.t =
 let inst_ptr : address ref =
   ref 0 (* address of next instruction to be executed *)
 
-let flag : bool ref = ref false
+let bool_flag : bool ref = ref false
 (* set by comparison operations; faciliates jump instructions for control flow *)
+
+let opt_flag : bool ref = ref false
 
 (* --VM IMPLEMENTATION-- *)
 let rec execute_operation (op : opcode) : operand option =
@@ -94,7 +99,7 @@ let rec execute_operation (op : opcode) : operand option =
             | NOT_EQUALS -> i1 <> i2
           in
           (* update flag with result *)
-          flag := result;
+          bool_flag := result;
           (* update instruction pointer *)
           inst_ptr := !inst_ptr + 1;
           None
@@ -115,7 +120,7 @@ let rec execute_operation (op : opcode) : operand option =
             | LOGICAL_OR, _, _ -> true
           in
           (* update flag with result *)
-          flag := result;
+          bool_flag := result;
           (* update instruction pointer *)
           inst_ptr := !inst_ptr + 1;
           None
@@ -157,9 +162,22 @@ let rec execute_operation (op : opcode) : operand option =
   | JMP (br1_rel_addr, br2_rel_addr) ->
       (* update instruction pointer based on result *)
       let rel_addr =
-        match !flag with true -> br1_rel_addr | false -> br2_rel_addr
+        match !bool_flag with true -> br1_rel_addr | false -> br2_rel_addr
       in
       inst_ptr := !inst_ptr + rel_addr;
+      None
+  | JMP_OPT (br1_rel_addr, br2_rel_addr) ->
+      (* update instruction pointer based on result *)
+      let rel_addr =
+        match !opt_flag with true -> br1_rel_addr | false -> br2_rel_addr
+      in
+      inst_ptr := !inst_ptr + rel_addr;
+      None
+  | SET_OPT_FLAG value ->
+      (* update value *)
+      opt_flag := value;
+      (* update instruction pointer *)
+      inst_ptr := !inst_ptr + 1;
       None
   | UNCONDITIONAL_JMP rel_addr ->
       inst_ptr := !inst_ptr + rel_addr;
