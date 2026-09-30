@@ -155,7 +155,9 @@ let process_func_decl ((func_decl, pos) : Ast.func_decl) (instn_offset : int) :
   (* store the instruction offset where each function begins *)
   Hashtbl.add func_details func_decl.func_name instn_offset;
   (* process function body *)
-  process_block func_decl.body env
+  match func_decl.return_type with
+  | VOID, _ -> process_block func_decl.body env @ [ Vm.RET_VOID ]
+  | _ -> process_block func_decl.body env
 
 let process_program (prog : Ast.prog) : Vm.opcode list =
   (* process each func decl *)

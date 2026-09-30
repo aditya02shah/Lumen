@@ -19,6 +19,7 @@ type opcode =
   | JMP of relative_address * relative_address
   | UNCONDITIONAL_JMP of relative_address
   | RET
+  | RET_VOID
   (* data *)
   | LOAD_LOCAL of var_offset
   | STORE_LOCAL of var_offset
@@ -185,6 +186,21 @@ let rec execute_operation (op : opcode) : operand option =
           (* we are at the main stack frame, we have reached the end of the program; 
           return the value on operand stack *)
           Some return_value)
+  | RET_VOID -> (
+      let stack_frame = Stack.top call_stack in
+      let return_addr = stack_frame.data_region in
+
+      match return_addr with
+      | RET_ADDR addr ->
+          (* return address indicates the next instn to be executed; update instn ptr *)
+          inst_ptr := addr;
+          (* remove stack frame from call stack since function has finished execution *)
+          ignore (Stack.pop call_stack);
+          None
+      | MAIN ->
+          (* update instruction pointer *)
+          inst_ptr := !inst_ptr + 1;
+          None)
   | LOAD_LOCAL var_offset ->
       (* gets value of local variable and push it onto the operand stack *)
       let frame = Stack.top call_stack in
