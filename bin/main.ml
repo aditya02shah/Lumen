@@ -23,15 +23,11 @@ let interpret_program (path : string) : unit =
           (fun e -> Printf.printf "SEMANTIC ERROR: %s\n" e)
           semantic_errors
       else
-        (* interpret *)
-        let result = Interpreter.eval_program prog in
-        match result with
-        | Some (Semantic_check.INT i) -> Printf.printf "%d\n" i
-        | Some (Semantic_check.BOOL b) -> Printf.printf "%b\n" b
-        | None -> print_endline "no value returned"
+        let opcodes, main_start = Bytecode.convert_ast_to_bytecode prog in
+        Vm.run_program opcodes main_start
 
 let () =
   let path =
-    if Array.length Sys.argv > 1 then Sys.argv.(1) else "examples/demo9.sui"
+    if Array.length Sys.argv > 1 then Sys.argv.(1) else "examples/demo2.sui"
   in
   interpret_program path

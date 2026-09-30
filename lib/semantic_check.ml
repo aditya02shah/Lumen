@@ -796,10 +796,16 @@ and check_loop (loop : Ast.loop) (fdetails : func_details) : semantic_errors =
 (* Program *)
 let rec check_prog (program : Ast.prog) : semantic_errors =
   (* check all the functions in the program *)
-  match program with
-  | [] -> []
-  | func :: rem_funcs ->
-      List.fold_left
-        (* gather all func_decl's *)
-        (fun acc fn_decl -> acc @ check_func_decl fn_decl)
-        [] (func :: rem_funcs)
+  let errs =
+    match program with
+    | [] -> []
+    | func :: rem_funcs ->
+        List.fold_left
+          (* gather all func_decl's *)
+          (fun acc fn_decl -> acc @ check_func_decl fn_decl)
+          [] (func :: rem_funcs)
+  in
+  (* main function is entry point into program *)
+  match Hashtbl.find_opt func_decls (Ast.IDENT "main") with
+  | Some _ -> errs
+  | None -> [ "Program doesn't contain 'main' method!" ] @ errs

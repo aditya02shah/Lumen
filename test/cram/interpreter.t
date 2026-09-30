@@ -1,51 +1,51 @@
   $ ../../bin/main.exe ../fixtures/func_add.sui
-  -20
+  Main function returned INT(-20)!
 
   $ ../../bin/main.exe ../fixtures/func_add2.sui
-  19
+  Main function returned INT(19)!
 
   $ ../../bin/main.exe ../fixtures/if1.sui
-  -11
+  Main function returned INT(-11)!
 
   $ ../../bin/main.exe ../fixtures/if2.sui
-  5
+  Main function returned INT(5)!
 
   $ ../../bin/main.exe ../fixtures/option1.sui
-  3
+  Main function returned INT(3)!
 
   $ ../../bin/main.exe ../fixtures/option2.sui
-  -1
+  Main function returned INT(-1)!
 
 
   $ ../../bin/main.exe ../fixtures/option_let1.sui
-  2
+  Main function returned INT(2)!
 
   $ ../../bin/main.exe ../fixtures/option_let2.sui
-  -1
+  Main function returned INT(-1)!
 
   $ ../../bin/main.exe ../fixtures/ctrl_flow.sui
-  -1
+  Main function returned INT(-1)!
 
   $ ../../bin/main.exe ../fixtures/nested_if1.sui
-  510
+  Main function returned INT(510)!
 
   $ ../../bin/main.exe ../fixtures/nested_if2.sui
-  530
+  Main function returned INT(530)!
 
   $ ../../bin/main.exe ../fixtures/nested_if3.sui
-  32
+  Main function returned INT(32)!
 
   $ ../../bin/main.exe ../fixtures/if_for.sui
-  99
+  Main function returned INT(99)!
 
   $ ../../bin/main.exe ../fixtures/if_else.sui
-  4
+  Main function returned INT(4)!
   $ ../../bin/main.exe ../fixtures/if_else_mutation.sui
-  32
+  Main function returned INT(32)!
 
   $ ../../bin/main.exe ../fixtures/while.sui
-  55
+  Main function returned INT(55)!
 
   $ ../../bin/main.exe ../fixtures/for.sui
-  55
+  Main function returned INT(55)!
 
