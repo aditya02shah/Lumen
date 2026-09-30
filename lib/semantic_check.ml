@@ -6,7 +6,14 @@ type semantic_errors = string list
 
 (* Variables *)
 type eval_value = INT of int | BOOL of bool
-type asst_val = NONE | EXPR of Ast.expr | VAL of eval_value | IS_PARAM
+
+type asst_val =
+  | NONE
+  | EXPR of Ast.expr
+  | VAL of eval_value
+  | IS_PARAM
+  | IN_CTRL_FLOW
+
 type var_details = { mut : bool; dtype : Ast.dtype; assigned_val : asst_val }
 
 (* Expressions *)
@@ -90,8 +97,14 @@ and check_asst ((at, pos) : Ast.asst) (env : scope_vars) (is_decl_asst : bool) :
         | [] -> (
             (* condition: expression type must match type of var being assigned to *)
             match (ent.dtype, get_expr_type at.expr env) with
-            | INT, Some (DTYPE INT) -> []
-            | BOOL, Some (DTYPE BOOL) -> []
+            | INT, Some (DTYPE INT) ->
+                Hashtbl.replace env at.name
+                  { ent with assigned_val = EXPR at.expr };
+                []
+            | BOOL, Some (DTYPE BOOL) ->
+                Hashtbl.replace env at.name
+                  { ent with assigned_val = EXPR at.expr };
+                []
             | dt1, Some dt2 ->
                 (* type mismatch *)
                 [
@@ -140,9 +153,6 @@ and check_expr (expr : Ast.expr) (env : scope_vars) : semantic_errors =
       | Some ent -> (
           (* check whether unassigned var is being used in the expression *)
           match ent.assigned_val with
-          | EXPR e -> []
-          | VAL v -> []
-          | IS_PARAM -> []
           | NONE ->
               (* var is not assigned a value *)
               [
@@ -150,7 +160,8 @@ and check_expr (expr : Ast.expr) (env : scope_vars) : semantic_errors =
                   (Printf.sprintf
                      "Expression: contains an unassigned variable '%s'!"
                      var_name);
-              ])
+              ]
+          | _ -> [])
       | _ ->
           (* var entry doesn't exist in our env *)
           [
@@ -186,6 +197,7 @@ and check_expr (expr : Ast.expr) (env : scope_vars) : semantic_errors =
                       ])
               | VAL v -> []
               | IS_PARAM -> []
+              | IN_CTRL_FLOW -> []
               | NONE ->
                   (* var has not been assigned a value *)
                   [
@@ -295,6 +307,7 @@ and check_var_in_expr (var : Ast.ident) (env : scope_vars) (pos : Ast.position)
               :: errs)
       | VAL v -> []
       | IS_PARAM -> []
+      | IN_CTRL_FLOW -> []
       | NONE ->
           (* var has not been assigned a value *)
           Utils.format_msg pos
@@ -691,13 +704,46 @@ and check_stmt (stmt : Ast.stmt) (fdetails : func_details) : semantic_errors =
       check_cond_expr cond fdetails.env
       @ check_block blk { fdetails with env = Hashtbl.copy fdetails.env }
   | IF_ELSE ((cond, if_blk), else_blk) ->
-      check_cond_expr cond fdetails.env
-      @ check_block if_blk { fdetails with env = Hashtbl.copy fdetails.env }
-      @ check_block else_blk { fdetails with env = Hashtbl.copy fdetails.env }
+      let cond_errs = check_cond_expr cond fdetails.env in
+      let if_env = Hashtbl.copy fdetails.env in
+      let else_env = Hashtbl.copy fdetails.env in
+      let if_errs = check_block if_blk { fdetails with env = if_env } in
+      let else_errs = check_block else_blk { fdetails with env = else_env } in
+      update_parent_scope if_env else_env fdetails.env;
+      cond_errs @ if_errs @ else_errs
   | LET _ -> check_let_stmt stmt fdetails
   | RETURN ret_expr -> check_ret_expr ret_expr fdetails
   | EXP e -> check_expr e fdetails.env
   | EMPTY -> []
+
+and update_parent_scope (if_scope : scope_vars) (else_scope : scope_vars)
+    (parent_scope : scope_vars) : unit =
+  (* propagate information about relevant variables in control flow to parent scope *)
+
+  (* iterate through all variable declarations in parent scope *)
+  Hashtbl.iter
+    (fun var_name (parent_entry : var_details) ->
+      (* check if variable also exists in both if & else block *)
+      match parent_entry.assigned_val with
+      | NONE -> (
+          (* if variable has not been assigned a value in parent scope, 
+          but it has been assigned values in both control flows, update its status
+          *)
+          let if_entry = Hashtbl.find_opt if_scope var_name in
+          let else_entry = Hashtbl.find_opt else_scope var_name in
+          match (if_entry, else_entry) with
+          | Some if_ent, Some else_ent -> (
+              match (if_ent.assigned_val, else_ent.assigned_val) with
+              | NONE, NONE -> ()
+              | NONE, _ -> ()
+              | _, NONE -> ()
+              | _ ->
+                  (* update value of variable in parent scope *)
+                  Hashtbl.replace parent_scope var_name
+                    { parent_entry with assigned_val = IN_CTRL_FLOW })
+          | _ -> ())
+      | _ -> ())
+    parent_scope
 
 and check_let_stmt (stmt : Ast.stmt) (fdetails : func_details) : semantic_errors
     =

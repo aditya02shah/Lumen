@@ -6,7 +6,14 @@ type semantic_errors = string list
 
 (* Variables *)
 type eval_value = INT of int | BOOL of bool
-type asst_val = NONE | EXPR of Ast.expr | VAL of eval_value | IS_PARAM
+
+type asst_val =
+  | NONE
+  | EXPR of Ast.expr
+  | VAL of eval_value
+  | IS_PARAM
+  | IN_CTRL_FLOW
+
 type var_details = { mut : bool; dtype : Ast.dtype; assigned_val : asst_val }
 
 (* Expressions *)
