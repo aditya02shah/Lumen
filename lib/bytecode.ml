@@ -13,6 +13,7 @@ let process_value ((value, pos) : Ast.value) (env : var_indices) :
     Vm.opcode list =
   match value with
   | IDENTIFIER ident ->
+      (* load variable *)
       let idx = Hashtbl.find env ident in
       [ Vm.LOAD_LOCAL idx ]
   | NUMBER i -> [ Vm.PUSH_CONST (INT i) ]
@@ -38,6 +39,7 @@ let rec process_expr ((expr, pos) : Ast.expr) (env : var_indices) :
       let var_idx = Hashtbl.find env var in
       [ Vm.LOAD_LOCAL var_idx ]
   | INCREMENT var ->
+      (* load variable, increment value & store *)
       let var_idx = Hashtbl.find env var in
       [
         Vm.LOAD_LOCAL var_idx;
@@ -60,8 +62,12 @@ let process_ret_expr ((ret_expr, pos) : Ast.ret_expr) (env : var_indices) :
     Vm.opcode list =
   match ret_expr with
   | EXPR e -> process_expr e env @ [ Vm.RET ]
-  | SOME_EXPR e -> process_expr e env @ [ Vm.SET_OPT_FLAG true; Vm.RET ]
-  | NONE -> [ Vm.SET_OPT_FLAG false; Vm.RET_VOID ]
+  | SOME_EXPR e ->
+      (* set optional flag to true to indicate optional function took Some path & return *)
+      process_expr e env @ [ Vm.SET_OPT_FLAG true; Vm.RET ]
+  | NONE ->
+      (* set optional flag to false to indicate optional function took Some path & return *)
+      [ Vm.SET_OPT_FLAG false; Vm.RET_VOID ]
 
 let rec process_var_update ((var_upd, pos) : Ast.var_update) (env : var_indices)
     : Vm.opcode list =
@@ -101,13 +107,16 @@ and process_stmt (stmt : Ast.stmt) (env : var_indices) : Vm.opcode list =
   | LOOP (lp, _) -> (
       match lp with
       | WHILE { cond; body } ->
+          (* process body *)
           let cond_inst = process_cond_expr cond env in
           let cond_len = List.length cond_inst in
           let blk_inst = process_block body env in
           let blk_len = List.length blk_inst in
           cond_inst
+          (* process body if condition is true *)
           @ [ Vm.JMP (1, blk_len + 2) ]
           @ blk_inst
+          (* repeat *)
           @ [ Vm.UNCONDITIONAL_JMP (-blk_len - cond_len - 1) ]
       | FOR { init; cond; update; body } ->
           let init_inst = process_stmt (VARDECL (DECL_ASST init)) env in
@@ -118,8 +127,10 @@ and process_stmt (stmt : Ast.stmt) (env : var_indices) : Vm.opcode list =
           let upd_inst = process_var_update update env in
           let upd_len = List.length upd_inst in
           init_inst @ cond_inst
+          (* process body if condition is true *)
           @ [ Vm.JMP (1, blk_len + upd_len + 2) ]
           @ blk_inst @ upd_inst
+          (* repeat *)
           @ [ Vm.UNCONDITIONAL_JMP (-upd_len - blk_len - cond_len - 1) ])
   | IF (ce, blk) ->
       let blk_inst = process_block blk (Hashtbl.copy env) in
@@ -132,9 +143,12 @@ and process_stmt (stmt : Ast.stmt) (env : var_indices) : Vm.opcode list =
       let else_blk_inst = process_block else_blk (Hashtbl.copy env) in
       let else_blk_len = List.length else_blk_inst in
       process_cond_expr ce env
+      (* process if block if condition is true *)
       @ [ Vm.JMP (1, if_blk_len + 2) ]
       @ if_blk_inst
+      (* jump after reaching end of if block *)
       @ [ Vm.UNCONDITIONAL_JMP (else_blk_len + 1) ]
+      (* otherwise process else block *)
       @ else_blk_inst
   | LET (({ var; func_call }, if_blk), else_blk) ->
       let if_blk_env = Hashtbl.copy env in
@@ -145,10 +159,13 @@ and process_stmt (stmt : Ast.stmt) (env : var_indices) : Vm.opcode list =
       let else_blk_inst = process_block else_blk (Hashtbl.copy env) in
       let else_blk_len = List.length else_blk_inst in
 
+      (* process function call *)
       process_expr (FUNC_CALL func_call, 0) env
+      (* process if blocks if Some value returned by optional function *)
       @ [ Vm.JMP_OPT (1, if_blk_len + 3) ]
+        (* store variable value in if block *)
       @ [ Vm.STORE_LOCAL (Hashtbl.find if_blk_env var) ]
-      @ if_blk_inst
+      @ if_blk_inst (* process else block *)
       @ [ Vm.UNCONDITIONAL_JMP (else_blk_len + 1) ]
       @ else_blk_inst
   | EMPTY -> []
