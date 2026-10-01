@@ -183,8 +183,39 @@ let process_program (prog : Ast.prog) : Vm.opcode list =
     (fun acc fd -> acc @ process_func_decl fd (List.length acc))
     [] prog
 
+let rec process_call (p : Vm.opcode) : Vm.opcode list =
+  (* function call might contain another function call as an argument; rearrange instructions to facilitate that *)
+  match p with
+  | CALL (addr, ops) ->
+      let rec process_subcalls (operands : Vm.opcode list list)
+          (new_operands : Vm.opcode list list) (subcalls : Vm.opcode list) :
+          Vm.opcode list list * Vm.opcode list =
+        match operands with
+        | [] -> (List.rev new_operands, subcalls)
+        | [ CALL (sub_addr, sub_ops) ] :: r ->
+            (* gather subcall and replace it with no-op *)
+            process_subcalls r ([] :: new_operands)
+              (CALL (sub_addr, sub_ops) :: subcalls)
+        | op :: r -> process_subcalls r (op :: new_operands) subcalls
+      in
+      let new_operands, subcalls = process_subcalls ops [] [] in
+      (* recursively process each subcall *)
+      List.fold_left (fun acc subcall -> process_call subcall @ acc) [] subcalls
+      @ [ CALL (addr, new_operands) ]
+  | _ -> [ p ]
+
+let rec post_processing (prog : Vm.opcode list) (accum : Vm.opcode list) :
+    Vm.opcode list =
+  (* process each function call *)
+  match prog with
+  | CALL (addr, operands) :: rem ->
+      post_processing rem (accum @ process_call (CALL (addr, operands)))
+  | op :: rem -> post_processing rem (accum @ [ op ])
+  | [] -> accum
+
 let convert_ast_to_bytecode (prog : Ast.prog) : Vm.opcode list * int =
   (* returns byte code, along with index of starting instruction *)
-  let bytecode = process_program prog in
+  let draft = process_program prog in
+  let bytecode = post_processing draft [] in
   let main_func_start = Hashtbl.find func_details (Ast.IDENT "main") in
   (bytecode, main_func_start)

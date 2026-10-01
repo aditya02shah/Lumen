@@ -35,6 +35,9 @@
   $ ../../bin/main.exe ../fixtures/nested_if3.sui
   Main function returned INT(32)!
 
+  $ ../../bin/main.exe ../fixtures/func_call.sui
+  Main function returned INT(-50)!
+
   $ ../../bin/main.exe ../fixtures/if_for.sui
   Main function returned INT(99)!
 
