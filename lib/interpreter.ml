@@ -62,8 +62,7 @@ and eval_expr ((expr, pos) : Ast.expr) (env : Semantic_check.scope_vars) :
       match (Hashtbl.find env x).assigned_val with
       | EXPR e -> eval_expr e env (* evaluate expr assigned to var *)
       | VAL v -> Some (VALUE v) (* var value has already been evaluated *)
-      | IS_PARAM -> raise Semantic_check.Internal_error
-      | NONE -> raise Semantic_check.Internal_error)
+      | _ -> raise Semantic_check.Internal_error)
   | INCREMENT x -> (
       (* find var entry in env *)
       let entry = Hashtbl.find env x in
@@ -97,8 +96,7 @@ and eval_expr ((expr, pos) : Ast.expr) (env : Semantic_check.scope_vars) :
               (* return it *)
               Some (VALUE (INT (i + 1)))
           | BOOL _ -> raise Semantic_check.Internal_error)
-      | IS_PARAM -> raise Semantic_check.Internal_error
-      | NONE -> raise Semantic_check.Internal_error)
+      | _ -> raise Semantic_check.Internal_error)
   | FUNC_CALL f -> eval_func_call f env
   | BINARY (op, exp1, exp2) -> (
       (* evaluate arithmetic expression *)

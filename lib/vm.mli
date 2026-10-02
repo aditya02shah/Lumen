@@ -25,4 +25,8 @@ type opcode =
   | STORE_LOCAL of var_offset
   | PUSH_CONST of operand
 
+(* --GLOBAL VARS-- *)
+val line_counter : (int, int) Hashtbl.t
+
+(* --PUBLIC INTERFACE-- *)
 val run_program : opcode list -> int -> unit

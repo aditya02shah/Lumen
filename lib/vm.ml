@@ -49,7 +49,10 @@ let inst_ptr : address ref =
 let bool_flag : bool ref = ref false
 (* set by comparison operations; faciliates jump instructions for control flow *)
 
-let opt_flag : bool ref = ref false
+let opt_flag : bool ref =
+  ref false (* set by optional functions, to indictate which path was taken *)
+
+let line_counter : (int, int) Hashtbl.t = Hashtbl.create Cfg.hashtable_size
 
 (* --VM IMPLEMENTATION-- *)
 let rec execute_operation (op : opcode) : operand option =
@@ -270,8 +273,14 @@ let run_program (byte_stream : opcode list) (main_offset : int) : unit =
 
   (* begin execution *)
   let rec process_program (byte_stream : opcode list) : unit =
+    let inst_idx = !inst_ptr in
     (* get instruction using instruction ptr *)
-    let inst = List.nth byte_stream !inst_ptr in
+    let inst = List.nth byte_stream inst_idx in
+
+    (* keep track of how many times an instruction has been executed *)
+    (match Hashtbl.find_opt line_counter inst_idx with
+    | Some v -> Hashtbl.replace line_counter inst_idx (v + 1)
+    | None -> Hashtbl.add line_counter inst_idx 1);
 
     (* execute instruction *)
     match execute_operation inst with

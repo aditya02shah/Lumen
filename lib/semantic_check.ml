@@ -33,10 +33,8 @@ type func_details = {
 }
 
 (* --GLOBAL VARS-- *)
-let hashtable_size = 50
-
 let func_decls : (Ast.ident, func_details) Hashtbl.t =
-  Hashtbl.create hashtable_size (* keeps track of function details *)
+  Hashtbl.create Cfg.hashtable_size (* keeps track of function details *)
 
 (* --HELPER FUNCTIONS-- *)
 let format_expr_type (etype : expr_type) =
@@ -519,7 +517,7 @@ and check_ret_expr (re : Ast.ret_expr) (fdetails : func_details) :
 (* function declaration *)
 and check_func_decl ((func_decl, pos) : Ast.func_decl) : semantic_errors =
   (* store func_decl *)
-  let fenv : scope_vars = Hashtbl.create hashtable_size in
+  let fenv : scope_vars = Hashtbl.create Cfg.hashtable_size in
   let fname = match func_decl.func_name with IDENT n -> n in
   let func_entry : func_details =
     {

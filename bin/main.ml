@@ -24,7 +24,18 @@ let interpret_program (path : string) : unit =
           semantic_errors
       else
         let opcodes, main_start = Bytecode.convert_ast_to_bytecode prog in
-        Vm.run_program opcodes main_start
+
+        Vm.run_program opcodes main_start;
+
+        List.iteri
+          (fun i opcode ->
+            let count =
+              match Hashtbl.find_opt Vm.line_counter i with
+              | Some count -> count
+              | None -> 0
+            in
+            Printf.printf "%d: %-30s [%d]\n" i (string_of_opcode opcode) count)
+          opcodes
 
 let () =
   let path =
