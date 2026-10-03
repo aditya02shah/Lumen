@@ -38,17 +38,25 @@ let get_basic_blocks_position (bytecode : Vm.opcode list) :
 
 (* --JIT IMPLEMENTATION-- *)
 let get_program_hotspots (bytecode : Vm.opcode list) (main_offset : int)
-    (threshold : int) : basic_block_position list =
+    (threshold : float) : basic_block_position list =
   (* returns the basic blocks in the program which are hotspots *)
   let bb = get_basic_blocks_position bytecode in
   let line_counter = Vm.run_program bytecode main_offset in
 
-  (* determine hotspots at instruction level in program *)
+  (* get total number of instructions in the program *)
+  let total_count =
+    Hashtbl.fold (fun idx cnt acc -> acc + cnt) line_counter 0
+  in
+
+  (* determine hotspots at instruction level in the program *)
   let inst_hotspots =
     List.rev
       (Hashtbl.fold
          (fun inst_idx isnt_count acc ->
-           if isnt_count >= threshold then inst_idx :: acc else acc)
+           (* if execution of instruction >= threshold, add it to list of hotspots *)
+           if Float.of_int isnt_count /. Float.of_int total_count >= threshold
+           then inst_idx :: acc
+           else acc)
          line_counter [])
   in
 
