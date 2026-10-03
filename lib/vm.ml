@@ -39,6 +39,11 @@ type stack_frame = {
   data_region : data; (* stores return address; facilitates function calls *)
 }
 
+(* execution information *)
+type inst_idx = int
+type exec_count = int
+type inst_counter = (inst_idx, exec_count) Hashtbl.t
+
 (* --Virtual Machine (VM) STATE-- *)
 let call_stack : stack_frame Stack.t =
   Stack.create () (* keep a track of programs execution state *)
@@ -52,7 +57,8 @@ let bool_flag : bool ref = ref false
 let opt_flag : bool ref =
   ref false (* set by optional functions, to indictate which path was taken *)
 
-let line_counter : (int, int) Hashtbl.t = Hashtbl.create Cfg.hashtable_size
+let exec_info : inst_counter = Hashtbl.create Cfg.hashtable_size
+(* stores number of times each instruction was executed (instruction idx <-> count) *)
 
 (* --VM IMPLEMENTATION-- *)
 let rec execute_operation (op : opcode) : operand option =
@@ -258,7 +264,7 @@ let rec execute_operation (op : opcode) : operand option =
       inst_ptr := !inst_ptr + 1;
       None
 
-let run_program (byte_stream : opcode list) (main_offset : int) : unit =
+let run_program (bytecode : opcode list) (main_offset : int) : inst_counter =
   (* setup stack frame for main *)
   let main_stack_frame : stack_frame =
     {
@@ -278,9 +284,9 @@ let run_program (byte_stream : opcode list) (main_offset : int) : unit =
     let inst = List.nth byte_stream inst_idx in
 
     (* keep track of how many times an instruction has been executed *)
-    (match Hashtbl.find_opt line_counter inst_idx with
-    | Some v -> Hashtbl.replace line_counter inst_idx (v + 1)
-    | None -> Hashtbl.add line_counter inst_idx 1);
+    (match Hashtbl.find_opt exec_info inst_idx with
+    | Some v -> Hashtbl.replace exec_info inst_idx (v + 1)
+    | None -> Hashtbl.add exec_info inst_idx 1);
 
     (* execute instruction *)
     match execute_operation inst with
@@ -291,4 +297,5 @@ let run_program (byte_stream : opcode list) (main_offset : int) : unit =
         | BOOL b -> Printf.printf "Main function returned BOOL(%b)!\n" b)
     | None -> process_program byte_stream (* continue processing program *)
   in
-  process_program byte_stream
+  process_program bytecode;
+  exec_info
