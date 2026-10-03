@@ -25,17 +25,26 @@ let interpret_program (path : string) : unit =
       else
         let opcodes, main_start = Bytecode.convert_ast_to_bytecode prog in
 
-        Vm.run_program opcodes main_start;
+        let exec_info = Vm.run_program opcodes main_start in
 
         List.iteri
           (fun i opcode ->
             let count =
-              match Hashtbl.find_opt Vm.line_counter i with
+              match Hashtbl.find_opt exec_info i with
               | Some count -> count
               | None -> 0
             in
             Printf.printf "%d: %-30s [%d]\n" i (string_of_opcode opcode) count)
-          opcodes
+          opcodes;
+
+        let hotspot_bb =
+          Jit.get_program_hotspots opcodes main_start Cfg.hotspot_threshold
+        in
+        List.iteri
+          (fun i { Jit.blk_start; blk_end } ->
+            Printf.printf "Hotspot Basic block %d start at %d and end at %d\n" i
+              blk_start blk_end)
+          hotspot_bb
 
 let () =
   let path =
