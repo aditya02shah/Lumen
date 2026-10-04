@@ -31,4 +31,4 @@ type exec_count = int
 type inst_counter = (inst_idx, exec_count) Hashtbl.t
 
 (* --PUBLIC INTERFACE-- *)
-val run_program : opcode list -> int -> inst_counter
+val run_program : opcode list -> int -> bool -> inst_counter

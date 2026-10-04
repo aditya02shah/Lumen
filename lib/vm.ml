@@ -264,7 +264,8 @@ let rec execute_operation (op : opcode) : operand option =
       inst_ptr := !inst_ptr + 1;
       None
 
-let run_program (bytecode : opcode list) (main_offset : int) : inst_counter =
+let run_program (bytecode : opcode list) (main_offset : int) (verbose : bool) :
+    inst_counter =
   (* setup stack frame for main *)
   let main_stack_frame : stack_frame =
     {
@@ -291,10 +292,13 @@ let run_program (bytecode : opcode list) (main_offset : int) : inst_counter =
     (* execute instruction *)
     match execute_operation inst with
     | Some value -> (
-        (* execute_operation function only returns value when program has finished execution; display result *)
-        match value with
-        | INT i -> Printf.printf "Main function returned INT(%d)!\n" i
-        | BOOL b -> Printf.printf "Main function returned BOOL(%b)!\n" b)
+        if
+          (* execute_operation function only returns value when program has finished execution; display result *)
+          verbose
+        then
+          match value with
+          | INT i -> Printf.printf "Main function returned INT(%d)!\n" i
+          | BOOL b -> Printf.printf "Main function returned BOOL(%b)!\n" b)
     | None -> process_program byte_stream (* continue processing program *)
   in
   process_program bytecode;

@@ -41,7 +41,7 @@ let get_program_hotspots (bytecode : Vm.opcode list) (main_offset : int)
     (threshold : float) : basic_block_position list =
   (* returns the basic blocks in the program which are hotspots *)
   let bb = get_basic_blocks_position bytecode in
-  let line_counter = Vm.run_program bytecode main_offset in
+  let line_counter = Vm.run_program bytecode main_offset false in
 
   (* get total number of instructions in the program *)
   let total_count =

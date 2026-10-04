@@ -317,7 +317,8 @@ and eval_func_call ((func_call, pos) : Ast.func_call)
   (* process function body by executing each statement in it *)
   process_block func_entry.body scope true NONE
 
-let eval_program (prog : Ast.prog) : Semantic_check.eval_value option =
+let eval_program (prog : Ast.prog) (verbose : bool) :
+    Semantic_check.eval_value option =
   (* find main function *)
   let main_func = Ast.IDENT "main" in
   let main_func_call : Ast.func_call =
@@ -326,6 +327,11 @@ let eval_program (prog : Ast.prog) : Semantic_check.eval_value option =
   match Hashtbl.find_opt Semantic_check.func_decls main_func with
   | Some entry -> (
       match eval_func_call main_func_call entry.env with
-      | Some (VALUE v) -> Some v
+      | Some (VALUE v) ->
+          (if verbose then
+             match v with
+             | INT i -> Printf.printf "Main function returned INT(%d)!\n" i
+             | BOOL b -> Printf.printf "Main function returned BOOL(%b)!\n" b);
+          Some v
       | _ -> None)
   | None -> None
