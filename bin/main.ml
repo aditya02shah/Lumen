@@ -25,7 +25,7 @@ let interpret_program (path : string) : unit =
       else
         let opcodes, main_start = Bytecode.convert_ast_to_bytecode prog in
 
-        let exec_info = Vm.run_program opcodes main_start in
+        let exec_info = Vm.run_program opcodes main_start true in
 
         List.iteri
           (fun i opcode ->
@@ -44,7 +44,15 @@ let interpret_program (path : string) : unit =
           (fun i { Jit.blk_start; blk_end } ->
             Printf.printf "Hotspot Basic block %d start at %d and end at %d\n" i
               blk_start blk_end)
-          hotspot_bb
+          hotspot_bb;
+
+        let func = List.filteri (fun i _ -> i < 6) opcodes in
+        let call = List.nth opcodes 6 in
+        let arguments = match call with CALL (addr, args) -> args | _ -> [] in
+
+        let binary = Jit.compile_hot_function func arguments false in
+        let final = run_code binary in
+        Printf.printf "Result from C: %d\n" final
 
 let () =
   let path =

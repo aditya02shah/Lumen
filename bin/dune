@@ -2,6 +2,9 @@
  (public_name lumen)
  (name main)
  (libraries lumen)
- (modes byte)
+ (foreign_stubs
+  (language c)
+  (names memory))
+ (modes exe)
  (flags
   (:standard -g)))
