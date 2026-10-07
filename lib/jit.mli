@@ -7,3 +7,7 @@ type basic_block_position = { blk_start : int; blk_end : int }
 (* --JIT IMPLEMENTATION-- *)
 val get_program_hotspots :
   Vm.opcode list -> int -> float -> basic_block_position list
+
+(* --JIT BACKEND IMPLEMENTATION-- *)
+val compile_hot_function :
+  Vm.opcode list -> Vm.opcode list list -> bool -> bytes
