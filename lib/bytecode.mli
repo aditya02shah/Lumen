@@ -1,1 +1,2 @@
-val convert_ast_to_bytecode : Ast.prog -> Vm.opcode list * int
+(* --PUBLIC INTERFACE-- *)
+val convert_ast_to_bytecode : Ast.prog -> Opcode.opcode list * int

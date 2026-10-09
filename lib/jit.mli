@@ -2,12 +2,8 @@
 exception Jit_error
 
 (* --TYPE DECLARATIONS-- *)
-type basic_block_position = { blk_start : int; blk_end : int }
+type func_binary = { init : bytes; body : bytes; epilogue : bytes }
 
 (* --JIT IMPLEMENTATION-- *)
-val get_program_hotspots :
-  Vm.opcode list -> int -> float -> basic_block_position list
-
-(* --JIT BACKEND IMPLEMENTATION-- *)
-val compile_hot_function :
-  Vm.opcode list -> Vm.opcode list list -> bool -> bytes
+val compile_arguments_to_asm : Opcode.opcode list list -> bytes
+val compile_hot_function : Opcode.opcode list -> func_binary

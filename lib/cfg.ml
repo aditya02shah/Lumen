@@ -1,4 +1,4 @@
 let hashtable_size = 50
 
-let hotspot_threshold =
-  0.05 (* if instruction is executed >= threshold %, compile it *)
+let jit_threshold =
+  30 (* if instruction is executed >= jit_threshold times, jit it *)

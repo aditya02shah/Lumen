@@ -1,10 +1,5 @@
 (executable
- (public_name lumen)
  (name main)
- (libraries lumen)
- (foreign_stubs
-  (language c)
-  (names memory))
- (modes exe)
- (flags
-  (:standard -g)))
+ (public_name lumen)
+ (modes byte exe)
+ (libraries lumen))

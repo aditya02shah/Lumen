@@ -1,3 +1,8 @@
 (library
  (name lumen)
- (wrapped false))
+ (wrapped false)
+ (foreign_stubs
+  (language c)
+  (names memory))
+ (flags
+  (:standard -g)))
