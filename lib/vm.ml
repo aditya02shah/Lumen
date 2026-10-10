@@ -16,6 +16,7 @@ type stack_frame = {
 }
 
 type previous = ADDR of Opcode.address ref | None
+type flag = VAL of bool | EMPTY
 
 (* execution information *)
 type inst_idx = int
@@ -67,13 +68,17 @@ let call_stack : stack_frame Stack.t =
 let inst_ptr : Opcode.address ref =
   ref 0 (* address of next instruction to be executed *)
 
-let bool_flag : bool ref = ref false
+let bool_flag : flag ref = ref (VAL false)
 (* set by comparison operations; faciliates jump instructions for control flow *)
 
-let opt_flag : bool ref =
-  ref false (* set by optional functions, to indictate which path was taken *)
+let opt_flag : flag ref = ref (VAL false)
+(* set by optional functions, to indictate which path was taken *)
 
 let prev_function : previous = ADDR (ref 0)
+
+let clear_flags () : unit =
+  bool_flag := EMPTY;
+  opt_flag := EMPTY
 
 let rec execute_operation (op : Opcode.opcode) : Opcode.operand option =
   (* returns operand value executing the last instruction; otherwise returns None *)
@@ -122,7 +127,8 @@ let rec execute_operation (op : Opcode.opcode) : Opcode.operand option =
             | NOT_EQUALS -> i1 <> i2
           in
           (* update flag with result *)
-          bool_flag := result;
+
+          bool_flag := VAL result;
           (* update instruction pointer *)
           inst_ptr := !inst_ptr + 1;
           None
@@ -143,7 +149,7 @@ let rec execute_operation (op : Opcode.opcode) : Opcode.operand option =
             | LOGICAL_OR, _, _ -> true
           in
           (* update flag with result *)
-          bool_flag := result;
+          bool_flag := VAL result;
           (* update instruction pointer *)
           inst_ptr := !inst_ptr + 1;
           None
@@ -188,20 +194,26 @@ let rec execute_operation (op : Opcode.opcode) : Opcode.operand option =
   | JMP (br1_rel_addr, br2_rel_addr) ->
       (* update instruction pointer based on result *)
       let rel_addr =
-        match !bool_flag with true -> br1_rel_addr | false -> br2_rel_addr
+        match !bool_flag with
+        | VAL true -> br1_rel_addr
+        | VAL false -> br2_rel_addr
+        | EMPTY -> raise Internal_error
       in
       inst_ptr := !inst_ptr + rel_addr;
       None
   | JMP_OPT (br1_rel_addr, br2_rel_addr) ->
       (* update instruction pointer based on result *)
       let rel_addr =
-        match !opt_flag with true -> br1_rel_addr | false -> br2_rel_addr
+        match !bool_flag with
+        | VAL true -> br1_rel_addr
+        | VAL false -> br2_rel_addr
+        | EMPTY -> raise Internal_error
       in
       inst_ptr := !inst_ptr + rel_addr;
       None
   | SET_OPT_FLAG value ->
       (* update value *)
-      opt_flag := value;
+      opt_flag := VAL value;
       (* update instruction pointer *)
       inst_ptr := !inst_ptr + 1;
       None
@@ -359,6 +371,10 @@ let run_program (bytecode : Opcode.opcode list) (main_offset : int)
               let result = run_code binary in
               Printf.printf "Ran JIT for func{ST=%d,END=%d}and got RES = %d!\n"
                 func_start func_end result;
+
+              (* clear flags *)
+              clear_flags ();
+
               (* store result on operand stack *)
               Stack.push (Opcode.INT result)
                 (Stack.top call_stack).operand_stack;
