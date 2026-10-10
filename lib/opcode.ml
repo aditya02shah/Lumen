@@ -11,11 +11,11 @@ type opcode =
   | LOGICAL_COMBINATION of Ast.logical_combination
   (* functions *)
   | CALL of address * opcode list list
+  | RET
+  | RET_VOID
   (* ctrl flow *)
   | JMP of relative_address * relative_address (* boolean comparisons *)
   | UNCONDITIONAL_JMP of relative_address
-  | RET
-  | RET_VOID
   (* optional types *)
   | JMP_OPT of relative_address * relative_address (* optional types *)
   | SET_OPT_FLAG of bool

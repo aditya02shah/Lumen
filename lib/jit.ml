@@ -23,34 +23,60 @@ let stack_pointer = Emit.REG 31
 let stack_size = 512 (* size of stack frame allocated *)
 let operand_size = 8 (* bytes *)
 
+(* flags *)
+let bool_flag = Emit.REG 10
+let opt_flag = Emit.REG 11
+
 (* general *)
 let temp = Emit.REG 3 (* scratchpad *)
-
-let arithmetic_op2 =
-  Emit.REG 2 (* store second operand for binary arithmetic operations *)
-
-let arithmetic_op1 =
-  Emit.REG 1 (* store first operand for binary arithmetic operations *)
+let operand2 = Emit.REG 2 (* stores second operand for binary operations *)
+let operand1 = Emit.REG 1 (* stores first operand for binary operations *)
 
 let compile_opcode_to_asm (instruction : Opcode.opcode) : bytes =
   (* encodes single VM instruction into equivalent ARM64 bytes *)
   match instruction with
-  | ARITHMETIC ADD ->
+  (* ALU *)
+  | ARITHMETIC op ->
       (* pop second operand from the stack *)
       decrement_sp ();
       let inst1 =
-        Emit.load arithmetic_op2 operand_stack_reg
-          (!operand_stack_ptr * operand_size)
+        Emit.load operand2 operand_stack_reg (!operand_stack_ptr * operand_size)
       in
       (* pop first operand from the stack *)
       decrement_sp ();
       let inst2 =
-        Emit.load arithmetic_op1 operand_stack_reg
-          (!operand_stack_ptr * operand_size)
+        Emit.load operand1 operand_stack_reg (!operand_stack_ptr * operand_size)
       in
 
       (* perform operation *)
-      let inst3 = Emit.add temp arithmetic_op1 arithmetic_op2 in
+      let inst3 =
+        match op with
+        | ADD -> Emit.add temp operand1 operand2
+        | SUBTRACT -> Emit.sub temp operand1 operand2
+        | DIVIDE -> Emit.div_signed temp operand1 operand2
+        | MULTIPLY -> Emit.mul temp operand1 operand2
+        | MOD ->
+            Bytes.concat Bytes.empty
+              [
+                (* divide *)
+                Emit.div_signed temp operand1 operand2;
+                (* get difference *)
+                Emit.mul temp temp operand2;
+                (* get remainder *)
+                Emit.sub temp operand1 temp;
+              ]
+        | POW ->
+            Bytes.concat Bytes.empty
+              [
+                (* multiply till operand2 becomes 0 *)
+                Emit.mul temp operand1 operand2;
+                Emit.sub_imm operand2 operand2 1;
+                Emit.cmp_imm operand2 0;
+                Emit.conditional_set temp Ast.EQUALS;
+                (* TODO: *)
+                Emit.unconditional_jmp (-5);
+              ]
+      in
       (* store result on operand stack *)
       let inst4 =
         Emit.store temp operand_stack_reg (!operand_stack_ptr * operand_size)
@@ -65,6 +91,81 @@ let compile_opcode_to_asm (instruction : Opcode.opcode) : bytes =
           inst3;
           inst4;
         ]
+  | BOOLEAN op ->
+      (* pop second operand from the stack *)
+      decrement_sp ();
+      let inst1 =
+        Emit.load operand2 operand_stack_reg (!operand_stack_ptr * operand_size)
+      in
+      (* pop first operand from the stack *)
+      decrement_sp ();
+      let inst2 =
+        Emit.load operand1 operand_stack_reg (!operand_stack_ptr * operand_size)
+      in
+
+      Bytes.concat Bytes.empty
+        [
+          inst1;
+          inst2;
+          (* perform comparison *)
+          Emit.cmp operand1 operand2;
+          (* set flag *)
+          Emit.conditional_set bool_flag op;
+        ]
+  | LOGICAL_COMBINATION op ->
+      (* pop second operand from the stack *)
+      decrement_sp ();
+      let inst1 =
+        Emit.load operand2 operand_stack_reg (!operand_stack_ptr * operand_size)
+      in
+      (* pop first operand from the stack *)
+      decrement_sp ();
+      let inst2 =
+        Emit.load operand1 operand_stack_reg (!operand_stack_ptr * operand_size)
+      in
+
+      Bytes.concat Bytes.empty
+        [
+          inst1;
+          inst2;
+          (* perform combination *)
+          Emit.bitwise temp operand1 operand2 op;
+          Emit.cmp_imm temp 1;
+          (* set flag if result is 1 *)
+          Emit.conditional_set bool_flag Ast.EQUALS;
+        ]
+  (* functions *)
+  | CALL (addr, args) ->
+      (* TODO: function calls in function being compiled aren't supported *)
+      raise Jit_error
+  | RET | RET_VOID ->
+      (* TODO: function calls in function being compiled aren't supported *)
+      raise Jit_error
+  (* ctrl flow *)
+  | JMP (br1_rel_addr, br2_rel_addr) ->
+      Bytes.concat Bytes.empty
+        [
+          (* check if bool_flag is set *)
+          Emit.cmp_imm bool_flag 1;
+          (* if bool_flag is set, jump to br1_rel_addr *)
+          Emit.conditional_jmp Ast.EQUALS br1_rel_addr;
+          (* otherwise jump to br2_rel_addr *)
+          Emit.unconditional_jmp br2_rel_addr;
+        ]
+  | UNCONDITIONAL_JMP addr -> Emit.unconditional_jmp addr
+  (* optional types *)
+  | JMP_OPT (br1_rel_addr, br2_rel_addr) ->
+      Bytes.concat Bytes.empty
+        [
+          (* check if opt_flag is set *)
+          Emit.cmp_imm opt_flag 1;
+          (* if opt_flag is set, jump to br1_rel_addr *)
+          Emit.conditional_jmp Ast.EQUALS br1_rel_addr;
+          (* otherwise jump to br2_rel_addr *)
+          Emit.unconditional_jmp br2_rel_addr;
+        ]
+  | SET_OPT_FLAG value -> Emit.mov_imm opt_flag 1
+  (* data *)
   | LOAD_LOCAL offset ->
       let sp = !operand_stack_ptr in
       increment_sp ();
