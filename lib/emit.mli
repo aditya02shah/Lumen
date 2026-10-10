@@ -26,4 +26,5 @@ val bitwise : reg -> reg -> reg -> Ast.logical_combination -> bytes
 
 (* control flow *)
 val unconditional_jmp : int -> bytes
+val conditional_jmp : Ast.logical_compare -> int -> bytes
 val ret : unit -> bytes

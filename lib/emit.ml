@@ -19,14 +19,14 @@ let mov_imm (rdest : reg) (imm : int) : bytes =
   (* bits 0-4 = rdest *)
   Bytes.set_uint8 buf 0 (get_value_from_reg rdest land 0b11111);
 
-  (* bits 5-7 = lower 3 bits of imm *)
+  (* bits 5-7 = imm[0:3] *)
   let byte0 = Bytes.get_uint8 buf 0 lor ((imm land 0b111) lsl 5) in
   Bytes.set_uint8 buf 0 byte0;
 
-  (* bits 8-15 = next 8 bits of imm *)
+  (* bits 8-15 = imm[3:11] *)
   Bytes.set_uint8 buf 1 ((imm lsr 3) land 0b11111111);
 
-  (* bits 16-20 = upper 5 bits of imm *)
+  (* bits 16-20 = imm[11:16] *)
   Bytes.set_uint8 buf 2 ((imm lsr 11) land 0b11111 lor 0x80);
 
   Bytes.set_uint8 buf 3 0b11010010;
@@ -538,6 +538,50 @@ let unconditional_jmp (imm : int) : bytes =
   (* bits 26-31 = 000101 *)
   let byte3 = Bytes.get_uint8 buf 3 lor (0b000101 lsl 2) in
   Bytes.set_uint8 buf 3 byte3;
+
+  buf
+
+let conditional_jmp (cond : Ast.logical_compare) (imm : int) : bytes =
+  (*
+31                24 23                         5 4       0
+┌──────────────────┬─────────────────────────────┬─────────┐
+│     01010100     │            imm19            │  0 cond │
+└──────────────────┴─────────────────────────────┴─────────┘
+       8 bits                  19 bits              1+4 bits
+*)
+  let buf = Bytes.create 4 in
+
+  (* bits 0-4 = depend on cond *)
+  (match cond with
+  | EQUALS -> ( (* bits 0-4 = 0000 *) )
+  | NOT_EQUALS ->
+      (* bits 0-4 = 0001 *)
+      Bytes.set_uint8 buf 0 0b0001
+  | GREATER_THAN ->
+      (* bits 0-4 = 1100 *)
+      Bytes.set_uint8 buf 0 0b1100
+  | GREATER_THAN_EQUALS ->
+      (* bits 0-4 = 1010 *)
+      Bytes.set_uint8 buf 0 0b1010
+  | LESS_THAN ->
+      (* bits 0-4 = 1011 *)
+      Bytes.set_uint8 buf 0 0b1011
+  | LESS_THAN_EQUALS ->
+      (* bits 0-4 = 1101 *)
+      Bytes.set_uint8 buf 0 0b1101);
+
+  (* bits 5-7 = imm[0:3] *)
+  let byte0 = Bytes.get_uint8 buf 0 lor ((imm land 0b111) lsl 5) in
+  Bytes.set_uint8 buf 0 byte0;
+
+  (* bits 8-15 = imm[3:11] *)
+  Bytes.set_uint8 buf 1 ((imm lsr 3) land 0b11111111);
+
+  (* bits 16-20 = imm[11:16] *)
+  Bytes.set_uint8 buf 2 ((imm lsr 11) land 0b11111);
+
+  (* bits 24-31 *)
+  Bytes.set_uint8 buf 3 0b01010100;
 
   buf
 
