@@ -25,7 +25,7 @@ type inst_counter = (inst_idx, exec_count) Hashtbl.t
 (* jit information *)
 type func_position = { func_start : int; func_end : int }
 
-let jit_cache : (func_position, Jit.jit_details) Hashtbl.t =
+let jit_cache : (func_position, Jit.func_binary) Hashtbl.t =
   Hashtbl.create Cfg.hashtable_size
 
 (* --HOTSPOT DETECTION-- *)

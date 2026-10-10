@@ -15,5 +15,10 @@ val sub_imm : reg -> reg -> int -> bytes
 val mul : reg -> reg -> reg -> bytes
 val div_signed : reg -> reg -> reg -> bytes
 
+(* comparison *)
+val cmp : reg -> reg -> reg -> bytes
+val cset : reg -> Ast.logical_compare -> bytes
+val bitwise : reg -> reg -> reg -> Ast.logical_combination -> bytes
+
 (* functions *)
 val ret : unit -> bytes

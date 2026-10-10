@@ -300,6 +300,146 @@ let div_signed (rdest : reg) (rsrc1 : reg) (rsrc2 : reg) : bytes =
 
   buf
 
+(* comparison *)
+let cmp (rdest : reg) (rsrc1 : reg) (rsrc2 : reg) : bytes =
+  (*
+31       24 23 22 21 20      16 15        10 9       5 4        0
+┌──────────┬───┬───┬───────────┬───────────┬──────────┬──────────┐
+│ 11001011 │ 0 │ 1 │    Rm     │ 000000    │   Rn     │ 11111    │
+└──────────┴───┴───┴───────────┴───────────┴──────────┴──────────┘
+*)
+  let buf = Bytes.create 4 in
+
+  (* bits 0-4 = 11111 *)
+  let byte0 = Bytes.get_uint8 buf 0 lor 0b11111 in
+  Bytes.set_uint8 buf 0 byte0;
+
+  (* bits 5-7 = lower 3 bits of rsrc1 *)
+  let byte0 =
+    Bytes.get_uint8 buf 0 lor ((get_value_from_reg rsrc1 land 0b111) lsl 5)
+  in
+  Bytes.set_uint8 buf 0 byte0;
+
+  (* bits 8-9 = upper 2 bits of rsrc1 *)
+  Bytes.set_uint8 buf 1 ((get_value_from_reg rsrc1 lsr 3) land 0b11);
+
+  (* bits 10-15 = 000011 *)
+  let byte1 = Bytes.get_uint8 buf 1 lor 0b000011 in
+  Bytes.set_uint8 buf 1 byte1;
+
+  (* bits 16-20 = rsrc2; bit 21 = 1 *)
+  Bytes.set_uint8 buf 2 (get_value_from_reg rsrc2 land 0b11111 lor 0b000001);
+
+  (* bits 24-31 *)
+  Bytes.set_uint8 buf 3 0b11001011;
+
+  buf
+
+let cset (rdest : reg) (op : Ast.logical_compare) : bytes =
+  (*
+31       24 23  21 20       16 15  12 11 10 9           5 4        0
+┌──────────┬─────┬───────────┬───────┬───┬───┬──────────┬──────────┐
+│ 10011010 │ 100 │   11111   │ 1111  │ 0 │ 1 │ 11111    │   Rd     │
+└──────────┴─────┴───────────┴───────┴───┴───┴──────────┴──────────┘
+*)
+  let buf = Bytes.create 4 in
+
+  (* bits 0-4 = rdest *)
+  Bytes.set_uint8 buf 0 (get_value_from_reg rdest land 0b11111);
+
+  (* bits 5-7 = 111  *)
+  let byte0 = Bytes.get_uint8 buf 0 lor (0b111 lsl 5) in
+  Bytes.set_uint8 buf 0 byte0;
+
+  (* bits 8-9 = 11; bit 10 = 1  *)
+  let byte1 = Bytes.get_uint8 buf 1 lor 0b0111 in
+  Bytes.set_uint8 buf 1 byte1;
+
+  (* bits 10-15 = 000011 *)
+  let byte1 = Bytes.get_uint8 buf 1 lor 0b000011 in
+  Bytes.set_uint8 buf 1 byte1;
+
+  (* bits 12-15 = depends on operation *)
+  (match op with
+  | EQUALS ->
+      (* bits 12-15 = 0001 *)
+      let byte1 = Bytes.get_uint8 buf 1 lor (0b0001 lsl 4) in
+      Bytes.set_uint8 buf 1 byte1
+  | NOT_EQUALS ->
+      (* bits 12-15 = 0000 *)
+      let byte1 = Bytes.get_uint8 buf 1 lor (0b0000 lsl 4) in
+      Bytes.set_uint8 buf 1 byte1
+  | GREATER_THAN ->
+      (* bits 12-15 = 1101 *)
+      let byte1 = Bytes.get_uint8 buf 1 lor (0b1101 lsl 4) in
+      Bytes.set_uint8 buf 1 byte1
+  | GREATER_THAN_EQUALS ->
+      (* bits 12-15 = 1011 *)
+      let byte1 = Bytes.get_uint8 buf 1 lor (0b1011 lsl 4) in
+      Bytes.set_uint8 buf 1 byte1
+  | LESS_THAN ->
+      (* bits 12-15 = 1010 *)
+      let byte1 = Bytes.get_uint8 buf 1 lor (0b1010 lsl 4) in
+      Bytes.set_uint8 buf 1 byte1
+  | LESS_THAN_EQUALS ->
+      (* bits 12-15 = 1100 *)
+      let byte1 = Bytes.get_uint8 buf 1 lor (0b1100 lsl 4) in
+      Bytes.set_uint8 buf 1 byte1);
+
+  (* bits 16-20 = 11111; bits 21-23 = 100 *)
+  let byte2 = Bytes.get_uint8 buf 2 lor 0b10011111 in
+  Bytes.set_uint8 buf 2 byte2;
+
+  (* bits 24-31 *)
+  Bytes.set_uint8 buf 3 0b10011010;
+
+  buf
+
+(* logical *)
+let bitwise (rdest : reg) (rsrc1 : reg) (rsrc2 : reg)
+    (op : Ast.logical_combination) : bytes =
+  (*
+31 30 29  24 23 22 21–16 15–10 9–5  4–0
+┌──┬──┬──────┬──┬──┬─────┬─────┬───┬───┐
+sf│opc│ 01010│N │ 0│ Rm  │imm6 │Rn │Rd │
+└──┴──┴──────┴──┴──┴─────┴─────┴───┴───┘
+
+31 | 30-29 | 28-24 | 23-22 | 21 | 20-16 | 15-10 | 9-5  | 4-0
+sf |  opc  | 01010 | shift |  N |  Rm   | imm6  |  Rn  | Rd
+ 1 |  00   | 01010 |  00   |  0 | 00010 | 000000| 00001| 00000
+*)
+  let buf = Bytes.create 4 in
+
+  (* bits 0-4 = rdest *)
+  Bytes.set_uint8 buf 0 (get_value_from_reg rdest land 0b11111);
+
+  (* bits 5-7 = lower 3 bits of rsrc1 *)
+  let byte0 =
+    Bytes.get_uint8 buf 0 lor ((get_value_from_reg rsrc1 land 0b111) lsl 5)
+  in
+  Bytes.set_uint8 buf 0 byte0;
+
+  (* bits 8-9 = upper 2 bits of rsrc1 *)
+  Bytes.set_uint8 buf 1 ((get_value_from_reg rsrc1 lsr 3) land 0b11);
+
+  (* bits 16-20 = rsrc2 *)
+  Bytes.set_uint8 buf 2 (get_value_from_reg rsrc2 land 0b11111);
+
+  (* bits 24-28 = 01010; bit 31 = 1 *)
+  Bytes.set_uint8 buf 3 0b10001010;
+
+  (* bits 29-30 = depends on operation *)
+  (match op with
+  | LOGICAL_AND ->
+      (* bits 29-30 = 00 *)
+      ()
+  | LOGICAL_OR ->
+      (* bits 29-30 = 01 *)
+      let byte3 = Bytes.get_uint8 buf 3 lor (0b01 lsl 5) in
+      Bytes.set_uint8 buf 3 byte3);
+
+  buf
+
 let ret () : bytes =
   let buf = Bytes.create 4 in
   Bytes.set_uint8 buf 0 0b11000000;
