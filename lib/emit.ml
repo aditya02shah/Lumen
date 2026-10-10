@@ -201,6 +201,36 @@ let add_imm (rdest : reg) (rsrc : reg) (imm : int) : bytes =
 
   buf
 
+let sub (rdest : reg) (rsrc1 : reg) (rsrc2 : reg) : bytes =
+  (* 
+31               24 23 22 21 20    16 15      10 9     5 4     0
+┌──────────────────┬──┬──┬──┬────────┬──────────┬───────┬───────┐
+│     11001011     │0 │0 │0 │   Rm   │  000000  │  Rn   │  Rd   │
+└──────────────────┴──┴──┴──┴────────┴──────────┴───────┴───────┘
+       8 bits       1  1  1   5 bits    6 bits   5 bits  5 bits
+  *)
+  let buf = Bytes.create 4 in
+
+  (* bits 0-4 = rdest *)
+  Bytes.set_uint8 buf 0 (get_value_from_reg rdest land 0b11111);
+
+  (* bits 5-7 = lower 3 bits of rsrc1 *)
+  let byte0 =
+    Bytes.get_uint8 buf 0 lor ((get_value_from_reg rsrc1 land 0b111) lsl 5)
+  in
+  Bytes.set_uint8 buf 0 byte0;
+
+  (* bits 8-9 = upper 2 bits of rsrc1 *)
+  Bytes.set_uint8 buf 1 ((get_value_from_reg rsrc1 lsr 3) land 0b11);
+
+  (* bits 16-20 = rsrc2 *)
+  Bytes.set_uint8 buf 2 (get_value_from_reg rsrc2 land 0b11111);
+
+  (* bits 24-31 *)
+  Bytes.set_uint8 buf 3 0b11001011;
+
+  buf
+
 let sub_imm (rdest : reg) (rsrc : reg) (imm : int) : bytes =
   (* 
 31       24 23 22 21 20          10 9       5 4       0
@@ -301,7 +331,7 @@ let div_signed (rdest : reg) (rsrc1 : reg) (rsrc2 : reg) : bytes =
   buf
 
 (* comparison *)
-let cmp (rdest : reg) (rsrc1 : reg) (rsrc2 : reg) : bytes =
+let cmp (rsrc1 : reg) (rsrc2 : reg) : bytes =
   (*
 31       24 23 22 21 20      16 15        10 9       5 4        0
 ┌──────────┬───┬───┬───────────┬───────────┬──────────┬──────────┐
@@ -335,7 +365,46 @@ let cmp (rdest : reg) (rsrc1 : reg) (rsrc2 : reg) : bytes =
 
   buf
 
-let cset (rdest : reg) (op : Ast.logical_compare) : bytes =
+let cmp_imm (rsrc : reg) (imm : int) : bytes =
+  (*
+31                24 23 22 21 20             10 9      5 4      0
+┌──────────────────┬──┬──┬──┬─────────────────┬────────┬────────┐
+│     11110010     │ 1│ 0│ 1│      imm12      │  Rn    │  11111 │
+└──────────────────┴──┴──┴──┴─────────────────┴────────┴────────┘
+       8 bits       1  1  1      12 bits       5 bits   5 bits
+*)
+  let buf = Bytes.create 4 in
+
+  (* bits 0-4 = 11111 *)
+  let byte0 = Bytes.get_uint8 buf 0 lor 0b11111 in
+  Bytes.set_uint8 buf 0 byte0;
+
+  (* bits 5-7 = lower 3 bits of rsrc1 *)
+  let byte0 =
+    Bytes.get_uint8 buf 0 lor ((get_value_from_reg rsrc land 0b111) lsl 5)
+  in
+  Bytes.set_uint8 buf 0 byte0;
+
+  (* bits 8-9 = upper 2 bits of rsrc1 *)
+  Bytes.set_uint8 buf 1 ((get_value_from_reg rsrc lsr 3) land 0b11);
+
+  (* bits 10-15 = lower 6 bits of imm *)
+  let byte1 = Bytes.get_uint8 buf 1 lor ((imm land 0b111111) lsl 2) in
+  Bytes.set_uint8 buf 1 byte1;
+
+  (* bits 16-21 = upper 6 bits of imm *)
+  Bytes.set_uint8 buf 2 ((imm lsr 6) land 0b111111);
+
+  (* bit 21 = 1; bit 23 = 1 *)
+  let byte2 = Bytes.get_uint8 buf 2 lor (0b101 lsl 5) in
+  Bytes.set_uint8 buf 2 byte2;
+
+  (* bits 24-31 *)
+  Bytes.set_uint8 buf 3 0b11110010;
+
+  buf
+
+let conditional_set (rdest : reg) (op : Ast.logical_compare) : bytes =
   (*
 31       24 23  21 20       16 15  12 11 10 9           5 4        0
 ┌──────────┬─────┬───────────┬───────┬───┬───┬──────────┬──────────┐
@@ -437,6 +506,38 @@ sf |  opc  | 01010 | shift |  N |  Rm   | imm6  |  Rn  | Rd
       (* bits 29-30 = 01 *)
       let byte3 = Bytes.get_uint8 buf 3 lor (0b01 lsl 5) in
       Bytes.set_uint8 buf 3 byte3);
+
+  buf
+
+(* control flow *)
+let unconditional_jmp (imm : int) : bytes =
+  (*
+  31               26 25                              0
+┌──────────────────┬──────────────────────────────────┐
+│      000101      │              imm26               │
+└──────────────────┴──────────────────────────────────┘
+       6 bits                    26 bits
+  *)
+  let buf = Bytes.create 4 in
+
+  (* bits 0-7 = imm[:8] *)
+  let byte0 = Bytes.get_uint8 buf 0 lor (imm land 0b11111111) in
+  Bytes.set_uint8 buf 0 byte0;
+
+  (* bits 8-15 = imm[8:16] *)
+  let byte1 = Bytes.get_uint8 buf 1 lor ((imm lsl 8) land 0b11111111) in
+  Bytes.set_uint8 buf 1 byte1;
+
+  (* bits 16-23 = imm[16:24] *)
+  let byte2 = Bytes.get_uint8 buf 2 lor ((imm lsl 16) land 0b11111111) in
+  Bytes.set_uint8 buf 2 byte2;
+
+  (* bits 24-25 = imm[24:26] *)
+  Bytes.set_uint8 buf 3 ((imm lsr 24) land 0b11);
+
+  (* bits 26-31 = 000101 *)
+  let byte3 = Bytes.get_uint8 buf 3 lor (0b000101 lsl 2) in
+  Bytes.set_uint8 buf 3 byte3;
 
   buf
 
