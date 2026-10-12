@@ -1,39 +1,63 @@
-## Lumen
-- A just-in-time (JIT) compiler for the *Lumen* programming language, implemented in OCaml
-- Lumen resembles a lighter C, with support for optional types & immutable variables
-- Lumen files use the `.sui` extension
+# Lumen
+- Lumen is a lightweight, C-like programming language with a tree-walk interpreter, a stack-based bytecode virtual machine, and a just-in-time (JIT) compiler targeting ARM64
+- Lumen is implemented in OCaml
+- Lumen source files use the `.sui` extension
 
 ## Features
+- Optional types (`Some`, `None`)
+- Immutable variables by default, with mutable variables declared using `mut`
 - Tree-walk interpreter
-- Stack-based bytecode virtual machine & intepreter
-- JIT compilation to ARM64
+- Stack-based bytecode virtual machine
+- JIT compilation to native ARM64 machine code
 
 ## Architecture
-- Source program -> Lexer -> Parser -> Semantic Checker -> Bytecode -> Virtual Machine -> ARM64 Machine Code → Native Execution
+```text
+Source → Lexer → Parser → Semantic Checker → AST
+                                              |
+                              ┌───────────────┴──────────────┐
+                              ↓                              ↓
+                       Tree-walk Interpreter          Bytecode Compiler
+                                                             ↓
+                                                       Bytecode VM
+                                                             ↓
+                                                      Hotspot Detection
+                                                             ↓
+                                                      ARM64 JIT Compiler
+                                                             ↓
+                                                      Native Execution
+```
 
-## Example
+### Running a Program
 
-### Running program
-- `dune exec lumen <lumen_file>`
-- `examples/for.sui`:
-Lumen Program:
+Run a Lumen source file using:
+
+```bash
+dune exec lumen examples/for.sui
+```
+
+### Example Program
+
+File: `examples/for.sui`
+
 ```c
-int sum_n(int n){
+int sumn(int n) {
     mut int sum = 0;
-    for (mut int i = 1; i <= n; i = i + 1){
+
+    for (mut int i = 1; i <= n; i = i + 1) {
         sum = sum + i;
     }
 
     return sum;
 }
 
-int main(){
-    int sum = sum_n(30);
+int main() {
+    int sum = sumn(30);
     return sum;
 }
 ```
-- Intermediate Bytecode:
-```
+
+#### Intermediate Bytecode
+```text
 0: PUSH_CONST 0                     
 1: STORE_LOCAL 1
 2: PUSH_CONST 1
@@ -58,7 +82,14 @@ int main(){
 21: LOAD_LOCAL 0
 22: RET
 ```
+
+#### Generated ARM64 Machine Code
+
+The JIT translates hot bytecode into native ARM64 instructions
+<details>
+<summary>View generated ARM64 machine code</summary>
 - Compiled executable if hotspot is detected:
+
 ```asm
 0:        ff 03 08 d1     sub     sp, sp, #0x200
 4:        e5 03 00 91     mov     x5, sp
@@ -118,6 +149,21 @@ d8:       e0 03 03 aa     mov     x0, x3
 dc:       ff 03 08 91     add     sp, sp, #0x200
 e0:       c0 03 5f d6     ret
 ```
+</details>
+
+
+
+
+## Implementation
+### Bytecode Virtual Machine
+- Converts AST into stack-based bytecode instructions
+- Operand stack is used to hold intermediate values during instruction execution (including a functions return value)
+- Stores local variables separately from the operand stack
+
+### Just-in-Time Compilation
+- Execution frequency is used to detect hotspots (configured in `cfg.ml`)
+- If a hotspot is detected, the sorrounding function is converted to machine code 
+- The machine code is then executed with the help of `memory.c`, which allocates executable memory and handles code execution
 
 
 ## Project Structure
@@ -138,7 +184,6 @@ e0:       c0 03 5f d6     ret
 │   └── emit.ml           # ARM64 machine-code generation
 ```
 
-
-Credit:
 ## References
 - [ARM64 Instruction Set Cheat Sheet](https://www.cs.swarthmore.edu/~kwebb/cs31/resources/ARM64_Cheat_Sheet.pdf)
+- [Bytecode and Virtual Machines](https://scg.unibe.ch/assets/download/lectures/cc-2015/CC-09-BytecodeVirtualMachines-Notes.pdf)
