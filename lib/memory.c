@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <caml/mlvalues.h>
 
-typedef int (*fp)(); // function ptr type
+typedef int64_t (*jit_fn)(void); // function ptr type
 
 CAMLprim value run_code(value bytes){
     // convert to 
@@ -30,13 +30,10 @@ CAMLprim value run_code(value bytes){
     }
 
     // cast memory into func ptr (we treat ptr as pointing to the function description)
-    fp add = (fp)mem;
-
     // call function
-    int res = add();
-    printf("Result is %d\n", res);
+    int64_t res = ((jit_fn)mem)();
     
     // free memory
     munmap(mem, code_size);
-    return Val_int(0);
+    return Val_long(res);
 }
