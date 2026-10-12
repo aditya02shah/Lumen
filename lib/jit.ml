@@ -32,6 +32,41 @@ let temp = Emit.REG 3 (* scratchpad *)
 let operand2 = Emit.REG 2 (* stores second operand for binary operations *)
 let operand1 = Emit.REG 1 (* stores first operand for binary operations *)
 
+let asm_instruction_count (instruction : Opcode.opcode) : int =
+  match instruction with
+  | PUSH_CONST _ -> 2
+  | STORE_LOCAL _ | LOAD_LOCAL _ -> 2
+  | SET_OPT_FLAG _ -> 1
+  | JMP_OPT _ -> 3
+  | UNCONDITIONAL_JMP _ -> 1
+  | JMP _ -> 3
+  | LOGICAL_COMBINATION _ -> 5
+  | BOOLEAN _ -> 4
+  | ARITHMETIC op -> ( match op with MOD -> 6 | POW -> 5 (* TODO: *) | _ -> 4)
+  | RET -> 4
+  | CALL _ -> 0 (* TODO: *)
+  | RET_VOID -> 0 (* TODO: *)
+
+let get_jmp_asm_offsets (inst_idx : int) (current_offsets : int list)
+    (bytecode : Opcode.opcode list) : int list =
+  let instruction_counts =
+    List.map (fun op -> asm_instruction_count op) bytecode
+  in
+  (* starts[k] = number of asm instructions emitted before bytecode k *)
+  let starts = 0 :: Utils.list_cumsum instruction_counts in
+  let start_of k = List.nth starts k in
+  (* position of each branch instruction within this bytecode inst's asm block:
+     JMP emits cmp; b.eq; b  -> b.eq at 1, b at 2
+     UNCONDITIONAL_JMP emits a single b at 0 *)
+  let branch_positions =
+    match List.nth bytecode inst_idx with
+    | Opcode.JMP _ -> [ 1; 2 ]
+    | _ -> [ 0 ]
+  in
+  List.map2
+    (fun offset pos -> start_of (inst_idx + offset) - (start_of inst_idx + pos))
+    current_offsets branch_positions
+
 let compile_opcode_to_asm (instruction : Opcode.opcode) : bytes =
   (* encodes single VM instruction into equivalent ARM64 bytes *)
   match instruction with
@@ -138,7 +173,20 @@ let compile_opcode_to_asm (instruction : Opcode.opcode) : bytes =
   | CALL (addr, args) ->
       (* TODO: function calls in function being compiled aren't supported *)
       raise Jit_error
-  | RET | RET_VOID ->
+  | RET ->
+      Bytes.concat Bytes.empty
+        (decrement_sp ();
+         [
+           (* pop operand from stack into temp register *)
+           Emit.load temp operand_stack_reg (!operand_stack_ptr * operand_size);
+           (* store temp register value into return register x0 *)
+           Emit.mov_reg return_register temp;
+           (* free stack frame *)
+           Emit.add_imm stack_pointer stack_pointer stack_size;
+           (* return *)
+           Emit.ret ();
+         ])
+  | RET_VOID ->
       (* TODO: function calls in function being compiled aren't supported *)
       raise Jit_error
   (* ctrl flow *)
@@ -199,6 +247,7 @@ let compile_opcode_to_asm (instruction : Opcode.opcode) : bytes =
 
 let compile_arguments_to_asm (func_args : Opcode.opcode list list) : bytes =
   (* generates ARM64 bytes to store function arguments as local variables in stack frame *)
+  operand_stack_ptr := 0;
   let process_arg (arg : Opcode.opcode list) : bytes list =
     List.rev
       (List.fold_left
@@ -224,6 +273,7 @@ let compile_arguments_to_asm (func_args : Opcode.opcode list list) : bytes =
 
 let compile_hot_function (func : Opcode.opcode list) : func_binary =
   (* encodes VM bytecode into ARM64 binary *)
+  operand_stack_ptr := 0;
   let init =
     Bytes.concat Bytes.empty
       [

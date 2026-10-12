@@ -334,6 +334,24 @@ let run_program (bytecode : Opcode.opcode list) (main_offset : int)
                   byte_stream
               in
 
+              (* adjust jump offsets *)
+              let func_body =
+                List.mapi
+                  (fun i inst ->
+                    match inst with
+                    | Opcode.JMP (a1, a2) ->
+                        let new_addr =
+                          Jit.get_jmp_asm_offsets i [ a1; a2 ] func_body
+                        in
+                        Opcode.JMP (List.nth new_addr 0, List.nth new_addr 1)
+                    | UNCONDITIONAL_JMP a ->
+                        let new_addr =
+                          Jit.get_jmp_asm_offsets i [ a ] func_body
+                        in
+                        Opcode.UNCONDITIONAL_JMP (List.nth new_addr 0)
+                    | _ -> inst)
+                  func_body
+              in
               (* get function arguments *)
               let func_call_idx =
                 let prev =
@@ -357,7 +375,7 @@ let run_program (bytecode : Opcode.opcode list) (main_offset : int)
                 | Some entry ->
                     (* function has already been compiled. reconstruct its binary *)
                     Bytes.concat Bytes.empty
-                      [ entry.init; entry.body; args; entry.epilogue ]
+                      [ entry.init; args; entry.body; entry.epilogue ]
                 | None ->
                     (* function needs to be compiled  *)
                     let prog = Jit.compile_hot_function func_body in
@@ -365,15 +383,40 @@ let run_program (bytecode : Opcode.opcode list) (main_offset : int)
                     Hashtbl.replace jit_cache { func_start; func_end } prog;
 
                     Bytes.concat Bytes.empty
-                      [ prog.init; prog.body; args; prog.epilogue ]
+                      [ prog.init; args; prog.body; prog.epilogue ]
               in
+              (match Cfg.debug with
+              | DIR d ->
+                  let oc =
+                    let fname =
+                      Printf.sprintf "%s/F_%d_%d" d func_start func_end
+                    in
+                    open_out_bin fname
+                  in
+
+                  output_bytes oc binary;
+                  close_out oc
+              | FALSE -> ());
               (* execute it *)
               let result = run_code binary in
-              Printf.printf "Ran JIT for func{ST=%d,END=%d}and got RES = %d!\n"
-                func_start func_end result;
 
               (* clear flags *)
               clear_flags ();
+
+              (match Cfg.debug with
+              | DIR d ->
+                  let oc =
+                    let fname =
+                      Printf.sprintf "%s/F_%d_%d" d func_start func_end
+                    in
+                    open_out_bin fname
+                  in
+                  Printf.printf
+                    "Ran JIT for func{ST=%d,END=%d}and got RES = %d!\n"
+                    func_start func_end result;
+                  output_bytes oc binary;
+                  close_out oc
+              | FALSE -> ());
 
               (* store result on operand stack *)
               Stack.push (Opcode.INT result)
