@@ -1,7 +1,13 @@
-int main(){
-    for (mut int i = 0; i < 10; i++){
-        printf(i);
+int sumn(int n){
+    mut int sum = 0;
+    for (mut int i = 1; i <= n; i = i + 1){
+        sum = sum + i;
     }
 
-    return 0;
+    return sum;
+}
+
+int main(){
+    int res = sumn(20);
+    return res;
 }

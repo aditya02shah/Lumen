@@ -319,122 +319,128 @@ let run_program (bytecode : Opcode.opcode list) (main_offset : int)
     (* get instruction using instruction ptr *)
     let inst = List.nth byte_stream inst_idx in
 
-    (* keep track of how many times an instruction has been executed *)
-    (match Hashtbl.find_opt counter inst_idx with
-    | Some v -> (
-        Hashtbl.replace counter inst_idx (v + 1);
-        if v + 1 >= Cfg.jit_threshold then
-          (* find function containing instruction *)
-          match get_func_containing_inst inst_idx func_positions with
-          | Some { func_start; func_end } ->
-              (* get function body *)
-              let func_body =
-                List.filteri
-                  (fun idx _ -> idx >= func_start && idx <= func_end)
-                  byte_stream
-              in
+    let jitted =
+      match Hashtbl.find_opt counter inst_idx with
+      | Some v ->
+          Hashtbl.replace counter inst_idx (v + 1);
+          if v + 1 >= Cfg.jit_threshold then
+            (* find function containing instruction *)
+            match get_func_containing_inst inst_idx func_positions with
+            | Some { func_start; func_end } ->
+                (* get function body *)
+                let func_body =
+                  List.filteri
+                    (fun idx _ -> idx >= func_start && idx <= func_end)
+                    byte_stream
+                in
 
-              (* adjust jump offsets *)
-              let func_body =
-                List.mapi
-                  (fun i inst ->
-                    match inst with
-                    | Opcode.JMP (a1, a2) ->
-                        let new_addr =
-                          Jit.get_jmp_asm_offsets i [ a1; a2 ] func_body
-                        in
-                        Opcode.JMP (List.nth new_addr 0, List.nth new_addr 1)
-                    | UNCONDITIONAL_JMP a ->
-                        let new_addr =
-                          Jit.get_jmp_asm_offsets i [ a ] func_body
-                        in
-                        Opcode.UNCONDITIONAL_JMP (List.nth new_addr 0)
-                    | _ -> inst)
-                  func_body
-              in
-              (* get function arguments *)
-              let func_call_idx =
-                let prev =
-                  match prev_function with
-                  | ADDR p -> p
+                (* adjust jump offsets *)
+                let func_body =
+                  List.mapi
+                    (fun i inst ->
+                      match inst with
+                      | Opcode.JMP (a1, a2) ->
+                          let new_addr =
+                            Jit.get_jmp_asm_offsets i [ a1; a2 ] func_body
+                          in
+                          Opcode.JMP (List.nth new_addr 0, List.nth new_addr 1)
+                      | UNCONDITIONAL_JMP a ->
+                          let new_addr =
+                            Jit.get_jmp_asm_offsets i [ a ] func_body
+                          in
+                          Opcode.UNCONDITIONAL_JMP (List.nth new_addr 0)
+                      | _ -> inst)
+                    func_body
+                in
+
+                (* get function arguments *)
+                let func_call_idx =
+                  let prev =
+                    match prev_function with
+                    | ADDR p -> p
+                    | _ -> raise Internal_error
+                  in
+                  !prev
+                in
+                let func_arguments =
+                  match List.nth byte_stream func_call_idx with
+                  | CALL (_, args) -> args
                   | _ -> raise Internal_error
                 in
-                !prev
-              in
-              let func_arguments =
-                match List.nth byte_stream func_call_idx with
-                | CALL (_, args) -> args
-                | _ -> raise Internal_error
-              in
 
-              (* encode function arguments *)
-              let args = Jit.compile_arguments_to_asm func_arguments in
-              (* check whether function has been compiled already *)
-              let binary =
-                match Hashtbl.find_opt jit_cache { func_start; func_end } with
-                | Some entry ->
-                    (* function has already been compiled. reconstruct its binary *)
-                    Bytes.concat Bytes.empty
-                      [ entry.init; args; entry.body; entry.epilogue ]
-                | None ->
-                    (* function needs to be compiled  *)
-                    let prog = Jit.compile_hot_function func_body in
+                (* encode function arguments *)
+                let args = Jit.compile_arguments_to_asm func_arguments in
 
-                    Hashtbl.replace jit_cache { func_start; func_end } prog;
+                (* check whether function has been compiled already *)
+                let binary =
+                  match Hashtbl.find_opt jit_cache { func_start; func_end } with
+                  | Some entry ->
+                      (* function has already been compiled. reconstruct its binary *)
+                      Bytes.concat Bytes.empty
+                        [ entry.init; args; entry.body; entry.epilogue ]
+                  | None ->
+                      (* function needs to be compiled  *)
+                      let prog = Jit.compile_hot_function func_body in
 
-                    Bytes.concat Bytes.empty
-                      [ prog.init; args; prog.body; prog.epilogue ]
-              in
-              (match Cfg.debug with
-              | DIR d ->
-                  let oc =
-                    let fname =
-                      Printf.sprintf "%s/F_%d_%d" d func_start func_end
+                      Hashtbl.replace jit_cache { func_start; func_end } prog;
+
+                      Bytes.concat Bytes.empty
+                        [ prog.init; args; prog.body; prog.epilogue ]
+                in
+                (match Cfg.debug with
+                | DIR d ->
+                    let oc =
+                      let fname =
+                        Printf.sprintf "%s/F_%d_%d" d func_start func_end
+                      in
+                      open_out_bin fname
                     in
-                    open_out_bin fname
-                  in
 
-                  output_bytes oc binary;
-                  close_out oc
-              | FALSE -> ());
-              (* execute it *)
-              let result = run_code binary in
+                    output_bytes oc binary;
+                    close_out oc
+                | FALSE -> ());
 
-              (* clear flags *)
-              clear_flags ();
+                (* execute it *)
+                let result = run_code binary in
 
-              (match Cfg.debug with
-              | DIR d ->
-                  let oc =
-                    let fname =
-                      Printf.sprintf "%s/F_%d_%d" d func_start func_end
-                    in
-                    open_out_bin fname
-                  in
-                  Printf.printf
-                    "Ran JIT for func{ST=%d,END=%d}and got RES = %d!\n"
-                    func_start func_end result;
-                  output_bytes oc binary;
-                  close_out oc
-              | FALSE -> ());
+                (* clear flags *)
+                clear_flags ();
 
-              (* store result on operand stack *)
-              Stack.push (Opcode.INT result)
-                (Stack.top call_stack).operand_stack;
-              inst_ptr := func_end
-          | None -> raise Internal_error)
-    | None -> Hashtbl.add counter inst_idx 1);
+                (match Cfg.debug with
+                | DIR d ->
+                    Printf.printf
+                      "Ran JIT for func{ST=%d,END=%d}and got RES = %d!\n"
+                      func_start func_end result
+                | FALSE -> ());
 
-    (* execute instruction *)
-    match execute_operation inst with
-    | Some value -> (
-        if
-          (* execute_operation function only returns value when program has finished execution; display result *)
-          verbose
-        then
-          match value with
-          | INT i -> Printf.printf "Main function returned INT(%d)!\n" i
-          | BOOL b -> Printf.printf "Main function returned BOOL(%b)!\n" b)
-    | None -> process_program byte_stream (* continue processing program *)
+                (match (Stack.top call_stack).data_region with
+                | RET_ADDR addr ->
+                    ignore (Stack.pop call_stack);
+                    Stack.push (Opcode.INT result)
+                      (Stack.top call_stack).operand_stack;
+                    inst_ptr := addr
+                | MAIN -> raise Internal_error);
+                true
+            | None -> raise Internal_error
+          else false
+      | None ->
+          Hashtbl.add counter inst_idx 1;
+          false
+    in
+
+    if jitted then process_program byte_stream
+    else
+      (* execute instruction *)
+      match execute_operation inst with
+      | Some value -> (
+          if
+            (* execute_operation only returns a value when the program has
+               finished execution; display result *)
+            verbose
+          then
+            match value with
+            | INT i -> Printf.printf "Main function returned INT(%d)!\n" i
+            | BOOL b -> Printf.printf "Main function returned BOOL(%b)!\n" b)
+      | None -> process_program byte_stream (* continue processing program *)
   in
   process_program bytecode

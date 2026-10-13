@@ -26,8 +26,30 @@ let rec replace_list_element_at_idx (l : 'a list) (idx : int) (new_val : 'a) :
       else x :: replace_list_element_at_idx xs (idx - 1) new_val
 
 let rec rotate_list (l : 'a list) (idx : int) (accum : 'a list) : 'a list =
+  (* rotates list to the left <idx> times *)
   match l with
   | [] -> []
   | x :: xs ->
       if idx = 0 then (x :: xs) @ List.rev accum
       else rotate_list xs (idx - 1) (x :: accum)
+
+let list_min (l : 'a list) : 'a option =
+  (* minimum element in the list *)
+  match l with
+  | [] -> None
+  | x :: xs -> Some (List.fold_left min x xs)
+
+let list_max (l : 'a list) : 'a option =
+  (* maximum element in the list *)
+  match l with
+  | [] -> None
+  | x :: xs -> Some (List.fold_left max x xs)
+
+let rec cumulative_sum_helper (l : int list) (prev : int) (accum : int list) :
+    (* return list containing cumulative sum of elements *)
+    'a list =
+  match l with
+  | [] -> List.rev accum
+  | x :: xs -> cumulative_sum_helper xs (x + prev) ((x + prev) :: accum)
+
+let list_cumsum (l : int list) : int list = cumulative_sum_helper l 0 []

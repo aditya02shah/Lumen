@@ -29,6 +29,11 @@ Source → Lexer → Parser → Semantic Checker → AST
 
 ### Running a Program
 
+#### Prerequisites
+
+- [OCaml](https://ocaml.org/install#linux_mac_bsd)
+- [Dune](https://dune.build/)
+
 Run a Lumen source file using:
 
 ```bash
